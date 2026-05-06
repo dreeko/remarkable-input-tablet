@@ -1,0 +1,89 @@
+<Window x:Class="RemarkableTablet.App.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="reMarkable Tablet Settings"
+        Width="480" Height="460"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Connection -->
+        <GroupBox Grid.Row="0" Header="Connection" Margin="0,0,0,8">
+            <Grid Margin="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="100"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Label Grid.Row="0" Grid.Column="0" Content="Address:" VerticalAlignment="Center"/>
+                <TextBox Grid.Row="0" Grid.Column="1" x:Name="AddressBox" Text="10.11.99.1" Margin="0,2"/>
+                <Button Grid.Row="0" Grid.Column="2" Content="Test" Width="50" Margin="4,2,0,2" Click="TestConnection_Click"/>
+                <Label Grid.Row="1" Grid.Column="0" Content="Password:" VerticalAlignment="Center"/>
+                <PasswordBox Grid.Row="1" Grid.Column="1" x:Name="PasswordBox" Margin="0,2"/>
+            </Grid>
+        </GroupBox>
+
+        <!-- Mapping -->
+        <GroupBox Grid.Row="1" Header="Mapping" Margin="0,0,0,8">
+            <Grid Margin="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="100"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Label Grid.Row="0" Grid.Column="0" Content="Orientation:" VerticalAlignment="Center"/>
+                <ComboBox Grid.Row="0" Grid.Column="1" x:Name="OrientationBox" Margin="0,2"
+                          SelectedIndex="0">
+                    <ComboBoxItem>Portrait (default)</ComboBoxItem>
+                    <ComboBoxItem>Landscape</ComboBoxItem>
+                    <ComboBoxItem>Portrait Flipped</ComboBoxItem>
+                    <ComboBoxItem>Landscape Flipped</ComboBoxItem>
+                </ComboBox>
+                <Label Grid.Row="1" Grid.Column="0" Content="Monitor:" VerticalAlignment="Center"/>
+                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="MonitorBox" Margin="0,2"/>
+            </Grid>
+        </GroupBox>
+
+        <!-- Output -->
+        <GroupBox Grid.Row="2" Header="Output Mode" Margin="0,0,0,8">
+            <StackPanel Margin="8">
+                <RadioButton x:Name="InkRadio" Content="Windows Ink (Krita, Photoshop 2018+, Affinity)" IsChecked="True"/>
+                <RadioButton x:Name="MouseRadio" Content="Mouse (no pressure — for testing only)" Margin="0,4,0,0"/>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- Startup -->
+        <GroupBox Grid.Row="3" Header="Startup" Margin="0,0,0,8">
+            <StackPanel Margin="8">
+                <CheckBox x:Name="AutoConnectBox" Content="Connect automatically when app starts"/>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- Status -->
+        <TextBlock Grid.Row="4" x:Name="StatusText" Margin="0,4,0,8"
+                   Foreground="Gray" FontStyle="Italic"/>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Connect" Width="80" Margin="0,0,8,0" Click="Connect_Click"/>
+            <Button Content="Disconnect" Width="80" Margin="0,0,8,0" Click="Disconnect_Click"/>
+            <Button Content="Close" Width="60" Click="Close_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

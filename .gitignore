@@ -1,0 +1,25 @@
+# Build output
+bin/
+obj/
+out/
+publish/
+
+# .NET user files
+*.user
+*.suo
+.vs/
+
+# Rider / JetBrains
+.idea/
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+
+# Fixture captures (large binary — generate locally with Phase0Diagnostics tool)
+pen_capture.bin
+
+# OS
+Thumbs.db
+.DS_Store

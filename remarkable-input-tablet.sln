@@ -1,0 +1,49 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RemarkableTablet.Core", "src\RemarkableTablet.Core\RemarkableTablet.Core.csproj", "{A1B2C3D4-0001-0000-0000-000000000001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RemarkableTablet.Windows", "src\RemarkableTablet.Windows\RemarkableTablet.Windows.csproj", "{A1B2C3D4-0002-0000-0000-000000000002}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RemarkableTablet.Cli", "src\RemarkableTablet.Cli\RemarkableTablet.Cli.csproj", "{A1B2C3D4-0003-0000-0000-000000000003}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RemarkableTablet.App", "src\RemarkableTablet.App\RemarkableTablet.App.csproj", "{A1B2C3D4-0004-0000-0000-000000000004}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RemarkableTablet.Core.Tests", "tests\RemarkableTablet.Core.Tests\RemarkableTablet.Core.Tests.csproj", "{A1B2C3D4-0005-0000-0000-000000000005}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RemarkableTablet.Windows.Tests", "tests\RemarkableTablet.Windows.Tests\RemarkableTablet.Windows.Tests.csproj", "{A1B2C3D4-0006-0000-0000-000000000006}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A1B2C3D4-0001-0000-0000-000000000001}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-0001-0000-0000-000000000001}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-0001-0000-0000-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-0001-0000-0000-000000000001}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D4-0002-0000-0000-000000000002}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-0002-0000-0000-000000000002}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-0002-0000-0000-000000000002}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-0002-0000-0000-000000000002}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D4-0003-0000-0000-000000000003}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-0003-0000-0000-000000000003}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-0003-0000-0000-000000000003}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-0003-0000-0000-000000000003}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D4-0004-0000-0000-000000000004}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-0004-0000-0000-000000000004}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-0004-0000-0000-000000000004}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-0004-0000-0000-000000000004}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D4-0005-0000-0000-000000000005}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-0005-0000-0000-000000000005}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-0005-0000-0000-000000000005}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-0005-0000-0000-000000000005}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D4-0006-0000-0000-000000000006}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-0006-0000-0000-000000000006}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-0006-0000-0000-000000000006}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-0006-0000-0000-000000000006}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,44 @@
+namespace RemarkableTablet.Core.Tablet;
+
+/// <summary>
+/// Hardware constants for the reMarkable 2 pen digitizer.
+/// Verified 2026-05-06 via evtest /dev/input/event1 on firmware with Wacom I2C Digitizer
+/// (Bus=0018, Vendor=2d1f, Product=0095, Version=1231). Struct size confirmed 16 bytes (armv7l).
+/// </summary>
+public static class ReMarkable2Constants
+{
+    // Pen device path on the tablet
+    public const string PenDevicePath = "/dev/input/event1";
+
+    // evdev struct size — 16 bytes on 32-bit ARM (i.MX7D Cortex-A7), confirmed armv7l
+    public const int EventStructSize = 16;
+
+    // ABS_X / ABS_Y — native landscape coords (pen slot at bottom = landscape)
+    // In portrait drawing orientation: screen_x=Y, screen_y=(XMax-X)
+    public const int PenXMin = 0;
+    public const int PenXMax = 20966;
+
+    public const int PenYMin = 0;
+    public const int PenYMax = 15725;
+
+    // ABS_PRESSURE — 12-bit, 4096 levels
+    public const int PressureMin = 0;
+    public const int PressureMax = 4095;
+
+    // ABS_DISTANCE — hover distance from surface
+    public const int DistanceMin = 0;
+    public const int DistanceMax = 255;
+
+    // ABS_TILT_X / ABS_TILT_Y — range ±9000 (firmware units, not degrees)
+    public const int TiltXMin = -9000;
+    public const int TiltXMax =  9000;
+    public const int TiltYMin = -9000;
+    public const int TiltYMax =  9000;
+
+    // Windows Ink pressure scale
+    public const int WindowsPressureMax = 1024;
+
+    // Windows Ink tilt range (degrees)
+    public const int WindowsTiltMin = -90;
+    public const int WindowsTiltMax =  90;
+}

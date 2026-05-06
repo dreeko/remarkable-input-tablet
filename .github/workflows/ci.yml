@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags:     ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore -c Release
+
+      - name: Test
+        run: dotnet test --no-build -c Release -q
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-test
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Publish CLI (NativeAOT)
+        run: >
+          dotnet publish src/RemarkableTablet.Cli
+          -c Release -r win-x64
+          -p:PublishAot=true
+          -p:InvariantGlobalization=true
+          -o publish/cli
+
+      - name: Publish App (self-contained trimmed)
+        run: >
+          dotnet publish src/RemarkableTablet.App
+          -c Release -r win-x64
+          -p:SelfContained=true
+          -p:PublishTrimmed=true
+          -p:PublishSingleFile=true
+          -o publish/app
+
+      - name: Package CLI
+        run: Compress-Archive -Path publish/cli/remtablet.exe -DestinationPath publish/remtablet-${{ github.ref_name }}-win-x64.zip
+        shell: pwsh
+
+      - name: Package App
+        run: Compress-Archive -Path publish/app/RemarkableTablet.App.exe -DestinationPath publish/RemtabletApp-${{ github.ref_name }}-win-x64.zip
+        shell: pwsh
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            publish/remtablet-${{ github.ref_name }}-win-x64.zip
+            publish/RemtabletApp-${{ github.ref_name }}-win-x64.zip
+          generate_release_notes: true
