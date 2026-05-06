@@ -101,7 +101,7 @@ public partial class App : Application
 
         await _pipeline!.DisposeAsync();
         _pipeline = null;
-        Dispatcher.Invoke(() => PipelineStateChanged?.Invoke(ConnectionState.Disconnected));
+        await Dispatcher.InvokeAsync(() => PipelineStateChanged?.Invoke(ConnectionState.Disconnected));
     }
 
     private void OnPipelineStateChanged(ConnectionState state)

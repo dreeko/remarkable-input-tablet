@@ -108,8 +108,8 @@ public sealed class SshTransport : IAsyncDisposable
         _command?.Dispose();
         _client?.Disconnect();
         _client?.Dispose();
-
-        _pipe?.Writer.Complete();
+        if (_pipe?.Writer is not null)
+            await _pipe.Writer.CompleteAsync();
         if (_pumpTask is not null)
             await _pumpTask.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
 

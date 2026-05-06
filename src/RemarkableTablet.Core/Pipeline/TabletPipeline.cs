@@ -34,7 +34,7 @@ public sealed class TabletPipeline : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _cts.Cancel();
+        await _cts.CancelAsync();
         await _transport.DisposeAsync();
         _output.Dispose();
         _cts.Dispose();

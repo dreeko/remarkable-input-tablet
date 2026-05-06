@@ -29,7 +29,7 @@ public class EvdevParserTests
         var channel = Channel.CreateUnbounded<EvdevEvent>();
 
         await pipe.Writer.WriteAsync(MakeEvent(EvdevTypes.EV_ABS, EvdevCodes.ABS_X, 12345));
-        pipe.Writer.Complete();
+        await pipe.Writer.CompleteAsync();
 
         await EvdevParser.RunAsync(pipe.Reader, channel.Writer, CancellationToken.None);
 
@@ -60,7 +60,7 @@ public class EvdevParserTests
         ];
 
         await pipe.Writer.WriteAsync(data);
-        pipe.Writer.Complete();
+        await pipe.Writer.CompleteAsync();
 
         await EvdevParser.RunAsync(pipe.Reader, channel.Writer, CancellationToken.None);
 
@@ -89,7 +89,7 @@ public class EvdevParserTests
             await pipe.Writer.FlushAsync();
         }
 
-        pipe.Writer.Complete();
+        await pipe.Writer.CompleteAsync();
 
         await EvdevParser.RunAsync(pipe.Reader, channel.Writer, CancellationToken.None);
 
@@ -124,7 +124,7 @@ public class EvdevParserTests
         var writeTask = Task.Run(async () =>
         {
             await pipe.Writer.WriteAsync(bytes);
-            pipe.Writer.Complete();
+            await pipe.Writer.CompleteAsync();
         });
 
         await EvdevParser.RunAsync(pipe.Reader, channel.Writer, CancellationToken.None);

@@ -14,11 +14,11 @@ var debug = args.Contains("--debug");
 
 if (password is null && keyPath is null)
 {
-    Console.Error.WriteLine("Error: provide --password <pw> or --key <path>");
-    Console.Error.WriteLine();
-    Console.Error.WriteLine("Usage:");
-    Console.Error.WriteLine("  remtablet --password <pw> [--address <ip>] [--orientation portrait|landscape] [--output ink|mouse] [--debug]");
-    Console.Error.WriteLine("  remtablet --key <path/to/id_rsa> [--address <ip>]");
+    await Console.Error.WriteLineAsync("Error: provide --password <pw> or --key <path>");
+    await Console.Error.WriteLineAsync();
+    await Console.Error.WriteLineAsync("Usage:");
+    await Console.Error.WriteLineAsync("  remtablet --password <pw> [--address <ip>] [--orientation portrait|landscape] [--output ink|mouse] [--debug]");
+    await Console.Error.WriteLineAsync("  remtablet --key <path/to/id_rsa> [--address <ip>]");
     return 1;
 }
 
