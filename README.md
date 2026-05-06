@@ -218,7 +218,6 @@ reMarkable 2                         Host PC
 | `RemarkableTablet.Cli` | Windows + Linux | `remtablet` — headless CLI, NativeAOT |
 | `RemarkableTablet.App` | Windows | `RemarkableTablet.App.exe` — system tray GUI, WPF + WinForms |
 | `tools/EventDiagnostics` | Windows | Live evdev event stream logger — streams events to console for debugging |
-| `tools/Phase0Diagnostics` | Windows | One-shot SSH capture tool — validates evdev struct layout and saves a fixture |
 
 ## Hardware details
 
