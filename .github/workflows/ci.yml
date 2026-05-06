@@ -39,16 +39,11 @@ jobs:
         with:
           dotnet-version: '10.x'
 
-      - name: Restore
-        run: |
-          dotnet restore src/RemarkableTablet.Cli/RemarkableTablet.Cli.csproj
-          dotnet restore tests/RemarkableTablet.Core.Tests/RemarkableTablet.Core.Tests.csproj
-
       - name: Build CLI
-        run: dotnet build src/RemarkableTablet.Cli/RemarkableTablet.Cli.csproj -c Release --no-restore
+        run: dotnet build src/RemarkableTablet.Cli/RemarkableTablet.Cli.csproj -c Release
 
       - name: Test Core
-        run: dotnet test tests/RemarkableTablet.Core.Tests/RemarkableTablet.Core.Tests.csproj -c Release --no-restore -q
+        run: dotnet test tests/RemarkableTablet.Core.Tests/RemarkableTablet.Core.Tests.csproj -c Release -q
 
   release-windows:
     name: Release (Windows)
