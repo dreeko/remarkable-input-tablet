@@ -2,10 +2,14 @@ using System.Runtime.InteropServices;
 
 namespace RemarkableTablet.Windows.Interop;
 
-internal static partial class User32
+internal static class User32
 {
-    internal const uint PT_PEN                    = 3;
-    internal const uint POINTER_FEEDBACK_DEFAULT  = 1;
+    internal const uint PT_PEN = 3;
+    internal const uint POINTER_FEEDBACK_DEFAULT = 1;
+
+    internal const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+    internal const uint MOUSEEVENTF_LEFTUP = 0x0004;
+    internal const uint MOUSEEVENTF_MOVE = 0x0001;
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern IntPtr CreateSyntheticPointerDevice(
@@ -30,8 +34,4 @@ internal static partial class User32
 
     [DllImport("user32.dll")]
     internal static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, UIntPtr dwExtraInfo);
-
-    internal const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
-    internal const uint MOUSEEVENTF_LEFTUP   = 0x0004;
-    internal const uint MOUSEEVENTF_MOVE     = 0x0001;
 }

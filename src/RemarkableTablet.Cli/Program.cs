@@ -5,12 +5,12 @@ using RemarkableTablet.Core.Transport;
 using RemarkableTablet.Windows.Output;
 
 // ── Parse args ───────────────────────────────────────────────────────────────
-string address     = GetArg(args, "--address",     "10.11.99.1")!;
-string? password   = GetArg(args, "--password",    null);
-string? keyPath    = GetArg(args, "--key",         null);
-string orientation = GetArg(args, "--orientation", "portrait")!;
-string outputMode  = GetArg(args, "--output",      "ink")!;
-bool   debug       = args.Contains("--debug");
+var address = GetArg(args, "--address", "10.11.99.1")!;
+var password = GetArg(args, "--password", null);
+var keyPath = GetArg(args, "--key", null);
+var orientation = GetArg(args, "--orientation", "portrait")!;
+var outputMode = GetArg(args, "--output", "ink")!;
+var debug = args.Contains("--debug");
 
 if (password is null && keyPath is null)
 {
@@ -29,14 +29,14 @@ var connOpts = keyPath is not null
 
 var orient = orientation.ToLowerInvariant() switch
 {
-    "landscape"        => Orientation.Landscape,
-    "portraitflipped"  => Orientation.PortraitFlipped,
+    "landscape" => Orientation.Landscape,
+    "portraitflipped" => Orientation.PortraitFlipped,
     "landscapeflipped" => Orientation.LandscapeFlipped,
-    _                  => Orientation.Portrait,
+    _ => Orientation.Portrait
 };
 
 var mappingOpts = MappingOptions.PrimaryMonitor(orient);
-var mapper      = new CoordinateMapper(mappingOpts);
+var mapper = new CoordinateMapper(mappingOpts);
 
 IOutputMode output = outputMode == "mouse"
     ? new MouseOutput()
@@ -85,6 +85,6 @@ return 0;
 // ── Helpers ───────────────────────────────────────────────────────────────────
 static string? GetArg(string[] args, string flag, string? fallback)
 {
-    int i = Array.IndexOf(args, flag);
+    var i = Array.IndexOf(args, flag);
     return i >= 0 && i + 1 < args.Length ? args[i + 1] : fallback;
 }

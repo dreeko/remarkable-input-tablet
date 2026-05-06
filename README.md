@@ -55,7 +55,7 @@ Hold the tablet with the **pen slot at the bottom** for portrait (default). Orie
 
 The **Windows Ink** output mode (default) works with:
 
-- **Krita** — enable *Use Tablet in Pen Mode* in Preferences → Tablet
+- **Krita** — Settings → Configure Krita → Tablet → set input to *Windows 8+ Pointer Input*
 - **Photoshop 2018+** — works out of the box
 - **Affinity Photo / Designer** — works out of the box
 - **Clip Studio Paint** — works out of the box
@@ -132,6 +132,8 @@ reMarkable 2                         Windows PC
 | `RemarkableTablet.Windows` | Win32 P/Invoke layer: Windows Ink pointer injection, mouse output |
 | `RemarkableTablet.Cli` | `remtablet.exe` — headless CLI, NativeAOT |
 | `RemarkableTablet.App` | `RemarkableTablet.App.exe` — system tray GUI, WPF + WinForms |
+| `tools/EventDiagnostics` | Live evdev event stream logger — streams events to console for debugging |
+| `tools/Phase0Diagnostics` | One-shot SSH capture tool — validates evdev struct layout and saves a fixture |
 
 ## Hardware details
 
@@ -139,8 +141,8 @@ Digitizer confirmed via `evtest` on firmware version 1231:
 
 | Axis | Range | Notes |
 |------|-------|-------|
-| X | 0 – 20966 | Native landscape, mapped to Y in portrait |
-| Y | 0 – 15725 | Native landscape, mapped to inverted X in portrait |
+| ABS_X | 0 – 20966 | Long axis: 0 = USB/bottom, max = top of device (portrait) |
+| ABS_Y | 0 – 15725 | Short axis: 0 = left, max = right of device (portrait) |
 | Pressure | 0 – 4095 | 12-bit, mapped to Windows 0–1024 via Bézier curve |
 | Distance | 0 – 255 | Hover height above surface |
 | Tilt X/Y | −9000 – 9000 | Firmware units, mapped to ±90° |

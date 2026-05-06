@@ -1,34 +1,46 @@
-using System.Drawing;
-using System.Windows.Forms;
 using RemarkableTablet.Core.Transport;
+using Application = System.Windows.Application;
 
 namespace RemarkableTablet.App;
 
 /// <summary>
-/// System tray icon. Reflects pipeline connection state and exposes
-/// Connect / Disconnect / Open Settings / Exit menu items.
-/// Pipeline lifecycle is owned by App.xaml.cs; TrayIcon calls into it.
+///     System tray icon. Reflects pipeline connection state and exposes
+///     Connect / Disconnect / Open Settings / Exit menu items.
+///     Pipeline lifecycle is owned by App.xaml.cs; TrayIcon calls into it.
 /// </summary>
 public sealed class TrayIcon : IDisposable
 {
-    private readonly System.Windows.Application _app;
-    private NotifyIcon?       _notify;
-    private ContextMenuStrip? _menu;
-    private ToolStripMenuItem? _statusItem;
+    private readonly Application _app;
     private ToolStripMenuItem? _connectItem;
     private ToolStripMenuItem? _disconnectItem;
-    private SettingsWindow?   _settingsWindow;
+    private ContextMenuStrip? _menu;
+    private NotifyIcon? _notify;
+    private SettingsWindow? _settingsWindow;
+    private ToolStripMenuItem? _statusItem;
 
-    public TrayIcon(System.Windows.Application app) => _app = app;
+    public TrayIcon(Application app)
+    {
+        _app = app;
+    }
+
+    private App AppInstance => (App)_app;
+
+    public void Dispose()
+    {
+        if (AppInstance is { } a)
+            a.PipelineStateChanged -= OnPipelineStateChanged;
+        _notify?.Dispose();
+        _menu?.Dispose();
+    }
 
     public void Initialize()
     {
         _menu = new ContextMenuStrip();
 
-        _statusItem     = new ToolStripMenuItem("Disconnected") { Enabled = false };
-        _connectItem    = new ToolStripMenuItem("Connect...",    null, (_, _) => OpenSettings());
-        _disconnectItem = new ToolStripMenuItem("Disconnect",    null, (_, _) => Disconnect())
-                          { Enabled = false };
+        _statusItem = new ToolStripMenuItem("Disconnected") { Enabled = false };
+        _connectItem = new ToolStripMenuItem("Connect...", null, (_, _) => OpenSettings());
+        _disconnectItem = new ToolStripMenuItem("Disconnect", null, (_, _) => Disconnect())
+            { Enabled = false };
 
         _menu.Items.Add(_statusItem);
         _menu.Items.Add(new ToolStripSeparator());
@@ -41,10 +53,10 @@ public sealed class TrayIcon : IDisposable
 
         _notify = new NotifyIcon
         {
-            Icon             = SystemIcons.Application,
-            Text             = "reMarkable Tablet",
+            Icon = SystemIcons.Application,
+            Text = "reMarkable Tablet",
             ContextMenuStrip = _menu,
-            Visible          = true,
+            Visible = true
         };
         _notify.DoubleClick += (_, _) => OpenSettings();
 
@@ -55,7 +67,7 @@ public sealed class TrayIcon : IDisposable
     {
         // Open the settings window so the user can supply their password,
         // then auto-connect once it's provided.
-        OpenSettings(autoConnect: true);
+        OpenSettings(true);
     }
 
     private void OpenSettings(bool autoConnect = false)
@@ -83,32 +95,22 @@ public sealed class TrayIcon : IDisposable
         // but dispatch anyway to be safe.
         _app.Dispatcher.Invoke(() =>
         {
-            (string statusText, bool connecting) = state switch
+            var (statusText, connecting) = state switch
             {
-                ConnectionState.Connected    => ("● Connected",    false),
-                ConnectionState.Connecting   => ("○ Connecting…",  true),
-                _                            => ("○ Disconnected", false),
+                ConnectionState.Connected => ("● Connected", false),
+                ConnectionState.Connecting => ("○ Connecting…", true),
+                _ => ("○ Disconnected", false)
             };
 
-            _statusItem.Text         = statusText;
-            _notify.Text             = $"reMarkable Tablet — {statusText}";
-            _connectItem!.Enabled    = state == ConnectionState.Disconnected;
+            _statusItem.Text = statusText;
+            _notify.Text = $"reMarkable Tablet — {statusText}";
+            _connectItem!.Enabled = state == ConnectionState.Disconnected;
             _disconnectItem!.Enabled = state != ConnectionState.Disconnected;
         });
     }
 
-    private App AppInstance => (App)_app;
-
     private void ExitApp()
     {
         _app.Dispatcher.Invoke(() => _app.Shutdown());
-    }
-
-    public void Dispose()
-    {
-        if (AppInstance is { } a)
-            a.PipelineStateChanged -= OnPipelineStateChanged;
-        _notify?.Dispose();
-        _menu?.Dispose();
     }
 }

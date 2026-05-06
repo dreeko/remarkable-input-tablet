@@ -5,30 +5,30 @@ using System.Text.Json.Serialization;
 namespace RemarkableTablet.App;
 
 /// <summary>
-/// User-facing settings persisted to %APPDATA%\remarkable-input-tablet\settings.json.
-/// Passwords are never stored here — the user is prompted each session.
+///     User-facing settings persisted to %APPDATA%\remarkable-input-tablet\settings.json.
+///     Passwords are never stored here — the user is prompted each session.
 /// </summary>
 public sealed class AppSettings
 {
-    public string Host        { get; set; } = "10.11.99.1";
-    public string Orientation { get; set; } = "Portrait";
-    public int    MonitorIndex { get; set; } = 0;
-    public string OutputMode  { get; set; } = "ink";
-    public bool   AutoConnect { get; set; } = false;
-
     // ── Persistence ──────────────────────────────────────────────────────────
     private static readonly string SettingsDir =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                     "remarkable-input-tablet");
+            "remarkable-input-tablet");
 
     private static readonly string SettingsPath =
         Path.Combine(SettingsDir, "settings.json");
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
-        WriteIndented           = true,
-        DefaultIgnoreCondition  = JsonIgnoreCondition.WhenWritingNull,
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
+
+    public string Host { get; set; } = "10.11.99.1";
+    public string Orientation { get; set; } = "Portrait";
+    public int MonitorIndex { get; set; }
+    public string OutputMode { get; set; } = "ink";
+    public bool AutoConnect { get; set; }
 
     public static AppSettings Load()
     {
@@ -42,6 +42,7 @@ public sealed class AppSettings
             }
         }
         catch { }
+
         return new AppSettings();
     }
 

@@ -1,7 +1,9 @@
 using System.Windows;
-using System.Windows.Forms;
 using RemarkableTablet.Core.Mapping;
 using RemarkableTablet.Core.Transport;
+using Renci.SshNet;
+using Application = System.Windows.Application;
+using Brushes = System.Windows.Media.Brushes;
 using TabletOrientation = RemarkableTablet.Core.Mapping.Orientation;
 
 namespace RemarkableTablet.App;
@@ -21,32 +23,35 @@ public partial class SettingsWindow : Window
         Closed += (_, _) => AppInstance.PipelineStateChanged -= OnPipelineStateChanged;
     }
 
+    private App AppInstance => (App)Application.Current;
+
     private void PopulateMonitors()
     {
         MonitorBox.Items.Clear();
         var screens = Screen.AllScreens;
-        for (int i = 0; i < screens.Length; i++)
+        for (var i = 0; i < screens.Length; i++)
         {
             var s = screens[i];
             MonitorBox.Items.Add($"Monitor {i + 1}{(s.Primary ? " (Primary)" : "")} — {s.Bounds.Width}×{s.Bounds.Height}");
         }
+
         MonitorBox.SelectedIndex = 0;
     }
 
     private void LoadSettings()
     {
         var s = AppSettings.Load();
-        AddressBox.Text        = s.Host;
+        AddressBox.Text = s.Host;
         MonitorBox.SelectedIndex = Math.Min(s.MonitorIndex, MonitorBox.Items.Count - 1);
         OrientationBox.SelectedIndex = s.Orientation switch
         {
-            "Landscape"        => 1,
-            "PortraitFlipped"  => 2,
+            "Landscape" => 1,
+            "PortraitFlipped" => 2,
             "LandscapeFlipped" => 3,
-            _                  => 0,
+            _ => 0
         };
-        InkRadio.IsChecked      = s.OutputMode != "mouse";
-        MouseRadio.IsChecked    = s.OutputMode == "mouse";
+        InkRadio.IsChecked = s.OutputMode != "mouse";
+        MouseRadio.IsChecked = s.OutputMode == "mouse";
         AutoConnectBox.IsChecked = s.AutoConnect;
 
         if (_autoConnect)
@@ -56,17 +61,17 @@ public partial class SettingsWindow : Window
     private void SaveSettings()
     {
         var s = AppSettings.Load();
-        s.Host         = AddressBox.Text.Trim();
+        s.Host = AddressBox.Text.Trim();
         s.MonitorIndex = MonitorBox.SelectedIndex;
-        s.Orientation  = OrientationBox.SelectedIndex switch
+        s.Orientation = OrientationBox.SelectedIndex switch
         {
             1 => "Landscape",
             2 => "PortraitFlipped",
             3 => "LandscapeFlipped",
-            _ => "Portrait",
+            _ => "Portrait"
         };
-        s.OutputMode   = MouseRadio.IsChecked == true ? "mouse" : "ink";
-        s.AutoConnect  = AutoConnectBox.IsChecked == true;
+        s.OutputMode = MouseRadio.IsChecked == true ? "mouse" : "ink";
+        s.AutoConnect = AutoConnectBox.IsChecked == true;
         s.Save();
     }
 
@@ -81,31 +86,31 @@ public partial class SettingsWindow : Window
         var password = PasswordBox.Password;
         if (string.IsNullOrWhiteSpace(password))
         {
-            SetStatus("Enter a password.", isError: true);
+            SetStatus("Enter a password.", true);
             return;
         }
 
         SaveSettings();
 
         var address = AddressBox.Text.Trim();
-        var screen  = Screen.AllScreens[MonitorBox.SelectedIndex];
-        var orient  = OrientationBox.SelectedIndex switch
+        var screen = Screen.AllScreens[MonitorBox.SelectedIndex];
+        var orient = OrientationBox.SelectedIndex switch
         {
             1 => TabletOrientation.Landscape,
             2 => TabletOrientation.PortraitFlipped,
             3 => TabletOrientation.LandscapeFlipped,
-            _ => TabletOrientation.Portrait,
+            _ => TabletOrientation.Portrait
         };
         var outputMode = MouseRadio.IsChecked == true ? "mouse" : "ink";
 
         var connOpts = ConnectionOptions.WithPassword(password, address);
         var mappingOpts = new MappingOptions
         {
-            MonitorX    = screen.Bounds.Left,
-            MonitorY    = screen.Bounds.Top,
-            MonitorW    = screen.Bounds.Width,
-            MonitorH    = screen.Bounds.Height,
-            Orientation = orient,
+            MonitorX = screen.Bounds.Left,
+            MonitorY = screen.Bounds.Top,
+            MonitorW = screen.Bounds.Width,
+            MonitorH = screen.Bounds.Height,
+            Orientation = orient
         };
 
         SetStatus("Connecting…");
@@ -122,11 +127,11 @@ public partial class SettingsWindow : Window
     private async void TestConnection_Click(object sender, RoutedEventArgs e)
     {
         var password = PasswordBox.Password;
-        var address  = AddressBox.Text.Trim();
+        var address = AddressBox.Text.Trim();
         SetStatus("Testing…");
         try
         {
-            using var client = new Renci.SshNet.SshClient(address, 22, "root", password);
+            using var client = new SshClient(address, 22, "root", password);
             await Task.Run(() => client.Connect());
             var result = client.RunCommand("echo ok").Result;
             client.Disconnect();
@@ -134,11 +139,14 @@ public partial class SettingsWindow : Window
         }
         catch (Exception ex)
         {
-            SetStatus($"Failed: {ex.Message}", isError: true);
+            SetStatus($"Failed: {ex.Message}", true);
         }
     }
 
-    private void Close_Click(object sender, RoutedEventArgs e) => Hide();
+    private void Close_Click(object sender, RoutedEventArgs e)
+    {
+        Hide();
+    }
 
     private void OnPipelineStateChanged(ConnectionState state)
     {
@@ -146,21 +154,19 @@ public partial class SettingsWindow : Window
         {
             SetStatus(state switch
             {
-                ConnectionState.Connected    => "Connected.",
-                ConnectionState.Connecting   => "Connecting…",
+                ConnectionState.Connected => "Connected.",
+                ConnectionState.Connecting => "Connecting…",
                 ConnectionState.Disconnected => "Disconnected.",
-                _                            => state.ToString(),
+                _ => state.ToString()
             });
         });
     }
 
     private void SetStatus(string msg, bool isError = false)
     {
-        StatusText.Text       = msg;
+        StatusText.Text = msg;
         StatusText.Foreground = isError
-            ? System.Windows.Media.Brushes.Red
-            : System.Windows.Media.Brushes.DimGray;
+            ? Brushes.Red
+            : Brushes.DimGray;
     }
-
-    private App AppInstance => (App)System.Windows.Application.Current;
 }

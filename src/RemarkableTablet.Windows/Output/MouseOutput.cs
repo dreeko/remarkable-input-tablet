@@ -1,13 +1,12 @@
-using System.Runtime.InteropServices;
 using RemarkableTablet.Core.Output;
 using RemarkableTablet.Windows.Interop;
 
 namespace RemarkableTablet.Windows.Output;
 
 /// <summary>
-/// Phase 1 output: dumb mouse cursor movement.
-/// Used to verify the full pipeline before replacing with WindowsInkOutput.
-/// No pressure or tilt support.
+///     Phase 1 output: dumb mouse cursor movement.
+///     Used to verify the full pipeline before replacing with WindowsInkOutput.
+///     No pressure or tilt support.
 /// </summary>
 public sealed class MouseOutput : IOutputMode
 {

@@ -14,7 +14,8 @@ public static class ReMarkable2Constants
     public const int EventStructSize = 16;
 
     // ABS_X / ABS_Y — portrait orientation (USB at bottom, device held tall)
-    // ABS_X is horizontal (left→right), ABS_Y is vertical (top→bottom)
+    // ABS_X is the LONG axis: 0=USB/bottom, PenXMax=top of device
+    // ABS_Y is the SHORT axis: 0=left, PenYMax=right of device
     public const int PenXMin = 0;
     public const int PenXMax = 20966;
 

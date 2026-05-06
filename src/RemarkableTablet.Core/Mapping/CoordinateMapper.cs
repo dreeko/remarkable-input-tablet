@@ -25,15 +25,16 @@ public sealed class CoordinateMapper
         var ny = frame.Y / (double)ReMarkable2Constants.PenYMax;
 
         // Apply orientation transform.
-        // rM2 evdev reports ABS_X as horizontal and ABS_Y as vertical when held portrait
-        // (USB at bottom). Rotating the device 90° CW gives landscape orientation.
+        // rM2 axis layout: ABS_X is the LONG axis (0=USB/bottom, max=top in portrait);
+        //                  ABS_Y is the SHORT axis (0=left, max=right in portrait).
+        // Landscape = 90° CCW from portrait so pen slot/USB ends up on the right.
         var (rx, ry) = _opts.Orientation switch
         {
-            Orientation.Portrait        => (nx,        ny       ),
-            Orientation.Landscape       => (ny,        1.0 - nx ),
-            Orientation.PortraitFlipped => (1.0 - nx,  1.0 - ny ),
-            Orientation.LandscapeFlipped => (1.0 - ny, nx       ),
-            _ => (nx, ny)
+            Orientation.Portrait => (ny, 1.0 - nx),
+            Orientation.Landscape => (1.0 - nx, 1.0 - ny),
+            Orientation.PortraitFlipped => (1.0 - ny, nx),
+            Orientation.LandscapeFlipped => (nx, ny),
+            _ => (ny, 1.0 - nx)
         };
 
         // Apply tablet area crop (user-selected active region)

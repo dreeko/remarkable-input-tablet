@@ -102,8 +102,10 @@ public sealed class SshTransport : IAsyncDisposable
 
     private async Task CleanupConnectionAsync()
     {
-        // Disconnect the SSH client first so the blocking stream.Read() in PumpBlocking
-        // throws immediately, allowing the pump task to exit rather than hanging forever.
+        // Order matters: dispose the command first so its OutputStream is closed,
+        // which unblocks the blocking stream.Read() in PumpBlocking. Disconnecting
+        // the SSH client alone does not reliably unblock it in SSH.NET.
+        _command?.Dispose();
         _client?.Disconnect();
         _client?.Dispose();
 
@@ -111,7 +113,6 @@ public sealed class SshTransport : IAsyncDisposable
         if (_pumpTask is not null)
             await _pumpTask.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
 
-        _command?.Dispose();
         _pumpTask = null;
         _command = null;
         _pipe = null;

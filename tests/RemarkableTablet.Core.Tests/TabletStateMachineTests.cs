@@ -9,7 +9,7 @@ public class TabletStateMachineTests
 {
     private static async Task<List<PenFrame>> RunFrames(params EvdevEvent[] events)
     {
-        var inputCh  = Channel.CreateUnbounded<EvdevEvent>();
+        var inputCh = Channel.CreateUnbounded<EvdevEvent>();
         var outputCh = Channel.CreateUnbounded<PenFrame>();
 
         foreach (var ev in events)
@@ -28,19 +28,19 @@ public class TabletStateMachineTests
     public async Task EmitsFrameOnSynReport()
     {
         var frames = await RunFrames(
-            new(EvdevTypes.EV_KEY, EvdevCodes.BTN_TOOL_PEN,     1),  // pen enters range
-            new(EvdevTypes.EV_ABS, EvdevCodes.ABS_X,        10000),
-            new(EvdevTypes.EV_ABS, EvdevCodes.ABS_Y,         8000),
-            new(EvdevTypes.EV_ABS, EvdevCodes.ABS_PRESSURE,  2048),
-            new(EvdevTypes.EV_KEY, EvdevCodes.BTN_TOUCH,         1),
-            new(EvdevTypes.EV_SYN, EvdevCodes.SYN_REPORT,        0)
+            new EvdevEvent(EvdevTypes.EV_KEY, EvdevCodes.BTN_TOOL_PEN, 1), // pen enters range
+            new EvdevEvent(EvdevTypes.EV_ABS, EvdevCodes.ABS_X, 10000),
+            new EvdevEvent(EvdevTypes.EV_ABS, EvdevCodes.ABS_Y, 8000),
+            new EvdevEvent(EvdevTypes.EV_ABS, EvdevCodes.ABS_PRESSURE, 2048),
+            new EvdevEvent(EvdevTypes.EV_KEY, EvdevCodes.BTN_TOUCH, 1),
+            new EvdevEvent(EvdevTypes.EV_SYN, EvdevCodes.SYN_REPORT, 0)
         );
 
         Assert.Single(frames);
         var f = frames[0];
         Assert.Equal(10000, f.X);
-        Assert.Equal(8000,  f.Y);
-        Assert.Equal(2048,  f.Pressure);
+        Assert.Equal(8000, f.Y);
+        Assert.Equal(2048, f.Pressure);
         Assert.True(f.IsTouch);
         Assert.True(f.InRange);
     }
@@ -49,8 +49,8 @@ public class TabletStateMachineTests
     public async Task DetectsEraserTool()
     {
         var frames = await RunFrames(
-            new(EvdevTypes.EV_KEY, EvdevCodes.BTN_TOOL_RUBBER, 1),
-            new(EvdevTypes.EV_SYN, EvdevCodes.SYN_REPORT,      0)
+            new EvdevEvent(EvdevTypes.EV_KEY, EvdevCodes.BTN_TOOL_RUBBER, 1),
+            new EvdevEvent(EvdevTypes.EV_SYN, EvdevCodes.SYN_REPORT, 0)
         );
 
         Assert.Single(frames);
@@ -64,14 +64,14 @@ public class TabletStateMachineTests
     {
         // First establish touch, then SYN_DROPPED should force pen-up
         var frames = await RunFrames(
-            new(EvdevTypes.EV_KEY, EvdevCodes.BTN_TOUCH,       1),
-            new(EvdevTypes.EV_SYN, EvdevCodes.SYN_REPORT,      0),  // frame 0: touching
-            new(EvdevTypes.EV_SYN, EvdevCodes.SYN_DROPPED,     0)   // frame 1: forced pen-up
+            new EvdevEvent(EvdevTypes.EV_KEY, EvdevCodes.BTN_TOUCH, 1),
+            new EvdevEvent(EvdevTypes.EV_SYN, EvdevCodes.SYN_REPORT, 0), // frame 0: touching
+            new EvdevEvent(EvdevTypes.EV_SYN, EvdevCodes.SYN_DROPPED, 0) // frame 1: forced pen-up
         );
 
         Assert.Equal(2, frames.Count);
         Assert.True(frames[0].IsTouch);
-        Assert.False(frames[1].IsTouch);  // forced pen-up
+        Assert.False(frames[1].IsTouch); // forced pen-up
         Assert.Equal(0, frames[1].Pressure);
     }
 
@@ -79,31 +79,31 @@ public class TabletStateMachineTests
     public async Task AccumulatesMultipleAbsEventsPerFrame()
     {
         var frames = await RunFrames(
-            new(EvdevTypes.EV_ABS, EvdevCodes.ABS_X,        5000),
-            new(EvdevTypes.EV_ABS, EvdevCodes.ABS_Y,        3000),
-            new(EvdevTypes.EV_ABS, EvdevCodes.ABS_PRESSURE,  500),
-            new(EvdevTypes.EV_ABS, EvdevCodes.ABS_TILT_X,    100),
-            new(EvdevTypes.EV_ABS, EvdevCodes.ABS_TILT_Y,   -200),
-            new(EvdevTypes.EV_ABS, EvdevCodes.ABS_DISTANCE,   10),
-            new(EvdevTypes.EV_SYN, EvdevCodes.SYN_REPORT,     0)
+            new EvdevEvent(EvdevTypes.EV_ABS, EvdevCodes.ABS_X, 5000),
+            new EvdevEvent(EvdevTypes.EV_ABS, EvdevCodes.ABS_Y, 3000),
+            new EvdevEvent(EvdevTypes.EV_ABS, EvdevCodes.ABS_PRESSURE, 500),
+            new EvdevEvent(EvdevTypes.EV_ABS, EvdevCodes.ABS_TILT_X, 100),
+            new EvdevEvent(EvdevTypes.EV_ABS, EvdevCodes.ABS_TILT_Y, -200),
+            new EvdevEvent(EvdevTypes.EV_ABS, EvdevCodes.ABS_DISTANCE, 10),
+            new EvdevEvent(EvdevTypes.EV_SYN, EvdevCodes.SYN_REPORT, 0)
         );
 
         var f = Assert.Single(frames);
-        Assert.Equal(5000,  f.X);
-        Assert.Equal(3000,  f.Y);
-        Assert.Equal(500,   f.Pressure);
-        Assert.Equal(100,   f.TiltX);
-        Assert.Equal(-200,  f.TiltY);
-        Assert.Equal(10,    f.Distance);
+        Assert.Equal(5000, f.X);
+        Assert.Equal(3000, f.Y);
+        Assert.Equal(500, f.Pressure);
+        Assert.Equal(100, f.TiltX);
+        Assert.Equal(-200, f.TiltY);
+        Assert.Equal(10, f.Distance);
     }
 
     [Fact]
     public async Task DetectsBarrelButton()
     {
         var frames = await RunFrames(
-            new(EvdevTypes.EV_KEY, EvdevCodes.BTN_TOOL_PEN, 1),
-            new(EvdevTypes.EV_KEY, EvdevCodes.BTN_STYLUS,   1),
-            new(EvdevTypes.EV_SYN, EvdevCodes.SYN_REPORT,   0)
+            new EvdevEvent(EvdevTypes.EV_KEY, EvdevCodes.BTN_TOOL_PEN, 1),
+            new EvdevEvent(EvdevTypes.EV_KEY, EvdevCodes.BTN_STYLUS, 1),
+            new EvdevEvent(EvdevTypes.EV_SYN, EvdevCodes.SYN_REPORT, 0)
         );
 
         Assert.True(frames[0].BarrelButton1);
