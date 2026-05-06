@@ -34,4 +34,7 @@ internal static class User32
 
     [DllImport("user32.dll")]
     internal static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, UIntPtr dwExtraInfo);
+
+    [DllImport("user32.dll")]
+    internal static extern int GetSystemMetrics(int nIndex);
 }

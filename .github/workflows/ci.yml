@@ -8,7 +8,8 @@ on:
     branches: [master]
 
 jobs:
-  build-test:
+  build-windows:
+    name: Build & Test (Windows)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,9 +28,32 @@ jobs:
       - name: Test
         run: dotnet test --no-build -c Release -q
 
-  release:
+  build-linux:
+    name: Build & Test (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore
+        run: |
+          dotnet restore src/RemarkableTablet.Cli/RemarkableTablet.Cli.csproj
+          dotnet restore tests/RemarkableTablet.Core.Tests/RemarkableTablet.Core.Tests.csproj
+
+      - name: Build CLI
+        run: dotnet build src/RemarkableTablet.Cli/RemarkableTablet.Cli.csproj -c Release --no-restore
+
+      - name: Test Core
+        run: dotnet test tests/RemarkableTablet.Core.Tests/RemarkableTablet.Core.Tests.csproj -c Release --no-restore -q
+
+  release-windows:
+    name: Release (Windows)
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build-test
+    needs: build-windows
     runs-on: windows-latest
     permissions:
       contents: write
@@ -58,17 +82,52 @@ jobs:
           -o publish/app
 
       - name: Package CLI
-        run: Compress-Archive -Path publish/cli/RemarkableTablet.Cli.exe -DestinationPath publish/remtablet-${{ github.ref_name }}-win-x64.zip
+        run: Compress-Archive -Path publish/cli/remtablet.exe -DestinationPath publish/remtablet-${{ github.ref_name }}-win-x64.zip
         shell: pwsh
 
       - name: Package App
         run: Compress-Archive -Path publish/app/* -DestinationPath publish/RemtabletApp-${{ github.ref_name }}-win-x64.zip
         shell: pwsh
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release and upload Windows artifacts
         uses: softprops/action-gh-release@v2
         with:
           files: |
             publish/remtablet-${{ github.ref_name }}-win-x64.zip
             publish/RemtabletApp-${{ github.ref_name }}-win-x64.zip
           generate_release_notes: true
+
+  release-linux:
+    name: Release (Linux)
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-linux
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Install NativeAOT prerequisites
+        run: sudo apt-get install -y clang zlib1g-dev
+
+      - name: Publish CLI (NativeAOT)
+        run: >
+          dotnet publish src/RemarkableTablet.Cli
+          -c Release -r linux-x64
+          -p:PublishAot=true
+          -p:InvariantGlobalization=true
+          -o publish/cli
+
+      - name: Package CLI
+        run: tar -czf publish/remtablet-${{ github.ref_name }}-linux-x64.tar.gz -C publish/cli remtablet
+
+      - name: Upload Linux artifact to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: publish/remtablet-${{ github.ref_name }}-linux-x64.tar.gz

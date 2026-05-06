@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RemarkableTablet.Core", "sr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RemarkableTablet.Windows", "src\RemarkableTablet.Windows\RemarkableTablet.Windows.csproj", "{A1B2C3D4-0002-0000-0000-000000000002}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RemarkableTablet.Linux", "src\RemarkableTablet.Linux\RemarkableTablet.Linux.csproj", "{A1B2C3D4-0008-0000-0000-000000000008}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RemarkableTablet.Cli", "src\RemarkableTablet.Cli\RemarkableTablet.Cli.csproj", "{A1B2C3D4-0003-0000-0000-000000000003}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RemarkableTablet.App", "src\RemarkableTablet.App\RemarkableTablet.App.csproj", "{A1B2C3D4-0004-0000-0000-000000000004}"
@@ -43,6 +45,10 @@ Global
 		{A1B2C3D4-0007-0000-0000-000000000007}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1B2C3D4-0007-0000-0000-000000000007}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A1B2C3D4-0007-0000-0000-000000000007}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D4-0008-0000-0000-000000000008}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-0008-0000-0000-000000000008}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-0008-0000-0000-000000000008}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-0008-0000-0000-000000000008}.Release|Any CPU.Build.0 = Release|Any CPU
 		{A1B2C3D4-0005-0000-0000-000000000005}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{A1B2C3D4-0005-0000-0000-000000000005}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1B2C3D4-0005-0000-0000-000000000005}.Release|Any CPU.ActiveCfg = Release|Any CPU

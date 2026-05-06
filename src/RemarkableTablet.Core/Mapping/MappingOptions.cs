@@ -1,5 +1,3 @@
-using System.Runtime.InteropServices;
-
 namespace RemarkableTablet.Core.Mapping;
 
 public enum Orientation
@@ -30,25 +28,7 @@ public sealed class MappingOptions
 
     public Orientation Orientation { get; init; } = Orientation.Portrait;
 
-    /// <summary>Full primary monitor, portrait orientation.</summary>
-    public static MappingOptions PrimaryMonitor(Orientation orientation = Orientation.Portrait)
-    {
-        // Get primary screen bounds via user32
-        var w = NativeMethods.GetSystemMetrics(0); // SM_CXSCREEN
-        var h = NativeMethods.GetSystemMetrics(1); // SM_CYSCREEN
-        return new MappingOptions
-        {
-            MonitorX = 0,
-            MonitorY = 0,
-            MonitorW = w,
-            MonitorH = h,
-            Orientation = orientation
-        };
-    }
-}
-
-internal static class NativeMethods
-{
-    [DllImport("user32.dll")]
-    internal static extern int GetSystemMetrics(int nIndex);
+    /// <summary>Map the full area of a screen with explicit dimensions.</summary>
+    public static MappingOptions ForScreen(int w, int h, Orientation orientation = Orientation.Portrait) =>
+        new() { MonitorX = 0, MonitorY = 0, MonitorW = w, MonitorH = h, Orientation = orientation };
 }
