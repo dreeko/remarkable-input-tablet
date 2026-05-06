@@ -55,7 +55,6 @@ jobs:
           dotnet publish src/RemarkableTablet.App
           -c Release -r win-x64
           -p:SelfContained=true
-          -p:PublishSingleFile=true
           -o publish/app
 
       - name: Package CLI
@@ -63,7 +62,7 @@ jobs:
         shell: pwsh
 
       - name: Package App
-        run: Compress-Archive -Path publish/app/RemarkableTablet.App.exe -DestinationPath publish/RemtabletApp-${{ github.ref_name }}-win-x64.zip
+        run: Compress-Archive -Path publish/app/* -DestinationPath publish/RemtabletApp-${{ github.ref_name }}-win-x64.zip
         shell: pwsh
 
       - name: Create GitHub Release
