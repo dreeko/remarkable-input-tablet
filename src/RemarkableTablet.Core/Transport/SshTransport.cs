@@ -1,31 +1,37 @@
 using System.IO.Pipelines;
-using Renci.SshNet;
 using RemarkableTablet.Core.Tablet;
+using Renci.SshNet;
 
 namespace RemarkableTablet.Core.Transport;
 
 /// <summary>
-/// SSH transport that streams /dev/input/event1 from the rM2 into a PipeReader.
-///
-/// Uses BeginExecute + OutputStream for continuous binary streaming.
-/// OutputStream is a PipeStream whose Read() blocks until data arrives.
-/// The blocking read runs on a thread-pool thread so it does not starve the
-/// async pipeline.
-///
-/// ConnectAsync may be called multiple times (e.g. after reconnection); each
-/// call cleans up the previous connection before establishing a new one.
+///     SSH transport that streams /dev/input/event1 from the rM2 into a PipeReader.
+///     Uses BeginExecute + OutputStream for continuous binary streaming.
+///     OutputStream is a PipeStream whose Read() blocks until data arrives.
+///     The blocking read runs on a thread-pool thread so it does not starve the
+///     async pipeline.
+///     ConnectAsync may be called multiple times (e.g. after reconnection); each
+///     call cleans up the previous connection before establishing a new one.
 /// </summary>
 public sealed class SshTransport : IAsyncDisposable
 {
     private readonly ConnectionOptions _opts;
-    private SshClient?  _client;
+    private SshClient? _client;
     private SshCommand? _command;
-    private Pipe?       _pipe;
-    private Task?       _pumpTask;
+    private Pipe? _pipe;
+    private Task? _pumpTask;
+
+    public SshTransport(ConnectionOptions opts)
+    {
+        _opts = opts;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await CleanupConnectionAsync();
+    }
 
     public event Action<ConnectionState>? StateChanged;
-
-    public SshTransport(ConnectionOptions opts) => _opts = opts;
 
     public async Task ConnectAsync(CancellationToken ct)
     {
@@ -37,7 +43,7 @@ public sealed class SshTransport : IAsyncDisposable
         await Task.Run(() => _client.Connect(), ct);
 
         _pipe = new Pipe(new PipeOptions(
-            pauseWriterThreshold:  64 * 1024,
+            pauseWriterThreshold: 64 * 1024,
             resumeWriterThreshold: 32 * 1024));
 
         _command = _client.CreateCommand($"cat {ReMarkable2Constants.PenDevicePath}");
@@ -57,13 +63,13 @@ public sealed class SshTransport : IAsyncDisposable
     private void PumpBlocking(PipeWriter writer, CancellationToken ct)
     {
         var stream = _command!.OutputStream;
-        var buf    = new byte[4096];
+        var buf = new byte[4096];
         Exception? fault = null;
         try
         {
             while (!ct.IsCancellationRequested)
             {
-                int read = stream.Read(buf, 0, buf.Length);
+                var read = stream.Read(buf, 0, buf.Length);
                 if (read == 0) break;
 
                 var mem = writer.GetMemory(read);
@@ -90,22 +96,25 @@ public sealed class SshTransport : IAsyncDisposable
             var key = new PrivateKeyFile(_opts.PrivateKeyPath);
             return new SshClient(_opts.Host, _opts.Port, _opts.Username, key);
         }
+
         return new SshClient(_opts.Host, _opts.Port, _opts.Username, _opts.Password ?? "");
     }
 
     private async Task CleanupConnectionAsync()
     {
+        // Disconnect the SSH client first so the blocking stream.Read() in PumpBlocking
+        // throws immediately, allowing the pump task to exit rather than hanging forever.
+        _client?.Disconnect();
+        _client?.Dispose();
+
         _pipe?.Writer.Complete();
         if (_pumpTask is not null)
             await _pumpTask.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
-        _command?.Dispose();
-        _client?.Disconnect();
-        _client?.Dispose();
-        _pumpTask = null;
-        _command  = null;
-        _pipe     = null;
-        _client   = null;
-    }
 
-    public async ValueTask DisposeAsync() => await CleanupConnectionAsync();
+        _command?.Dispose();
+        _pumpTask = null;
+        _command = null;
+        _pipe = null;
+        _client = null;
+    }
 }

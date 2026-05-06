@@ -1,9 +1,9 @@
 namespace RemarkableTablet.Core.Tablet;
 
 /// <summary>
-/// Hardware constants for the reMarkable 2 pen digitizer.
-/// Verified 2026-05-06 via evtest /dev/input/event1 on firmware with Wacom I2C Digitizer
-/// (Bus=0018, Vendor=2d1f, Product=0095, Version=1231). Struct size confirmed 16 bytes (armv7l).
+///     Hardware constants for the reMarkable 2 pen digitizer.
+///     Verified 2026-05-06 via evtest /dev/input/event1 on firmware with Wacom I2C Digitizer
+///     (Bus=0018, Vendor=2d1f, Product=0095, Version=1231). Struct size confirmed 16 bytes (armv7l).
 /// </summary>
 public static class ReMarkable2Constants
 {
@@ -13,8 +13,8 @@ public static class ReMarkable2Constants
     // evdev struct size — 16 bytes on 32-bit ARM (i.MX7D Cortex-A7), confirmed armv7l
     public const int EventStructSize = 16;
 
-    // ABS_X / ABS_Y — native landscape coords (pen slot at bottom = landscape)
-    // In portrait drawing orientation: screen_x=Y, screen_y=(XMax-X)
+    // ABS_X / ABS_Y — portrait orientation (USB at bottom, device held tall)
+    // ABS_X is horizontal (left→right), ABS_Y is vertical (top→bottom)
     public const int PenXMin = 0;
     public const int PenXMax = 20966;
 
@@ -31,14 +31,14 @@ public static class ReMarkable2Constants
 
     // ABS_TILT_X / ABS_TILT_Y — range ±9000 (firmware units, not degrees)
     public const int TiltXMin = -9000;
-    public const int TiltXMax =  9000;
+    public const int TiltXMax = 9000;
     public const int TiltYMin = -9000;
-    public const int TiltYMax =  9000;
+    public const int TiltYMax = 9000;
 
     // Windows Ink pressure scale
     public const int WindowsPressureMax = 1024;
 
     // Windows Ink tilt range (degrees)
     public const int WindowsTiltMin = -90;
-    public const int WindowsTiltMax =  90;
+    public const int WindowsTiltMax = 90;
 }
