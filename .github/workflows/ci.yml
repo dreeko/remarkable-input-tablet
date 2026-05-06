@@ -59,7 +59,7 @@ jobs:
           -o publish/app
 
       - name: Package CLI
-        run: Compress-Archive -Path publish/cli/remtablet.exe -DestinationPath publish/remtablet-${{ github.ref_name }}-win-x64.zip
+        run: Compress-Archive -Path publish/cli/RemarkableTablet.Cli.exe -DestinationPath publish/remtablet-${{ github.ref_name }}-win-x64.zip
         shell: pwsh
 
       - name: Package App
