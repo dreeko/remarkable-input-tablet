@@ -39,11 +39,11 @@ jobs:
         with:
           dotnet-version: '10.x'
 
+      - name: Test Core
+        run: dotnet test tests/RemarkableTablet.Core.Tests/RemarkableTablet.Core.Tests.csproj -c Release
+
       - name: Build CLI
         run: dotnet build src/RemarkableTablet.Cli/RemarkableTablet.Cli.csproj -c Release
-
-      - name: Test Core
-        run: dotnet test tests/RemarkableTablet.Core.Tests/RemarkableTablet.Core.Tests.csproj -c Release -q
 
   release-windows:
     name: Release (Windows)
