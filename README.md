@@ -151,8 +151,9 @@ dotnet test
 ### Linux
 
 ```bash
-# Build and test Linux-compatible projects
-dotnet build src/RemarkableTablet.Cli
+# Build and test Linux-compatible projects.
+# -f net10.0 skips the Windows TFM (CLI is multi-targeted).
+dotnet build src/RemarkableTablet.Cli -f net10.0
 dotnet test tests/RemarkableTablet.Core.Tests
 ```
 
@@ -227,7 +228,7 @@ Digitizer confirmed via `evtest` on firmware version 1231:
 |------|-------|-------|
 | ABS_X | 0 – 20966 | Long axis: 0 = USB/bottom, max = top of device (portrait) |
 | ABS_Y | 0 – 15725 | Short axis: 0 = left, max = right of device (portrait) |
-| Pressure | 0 – 4095 | 12-bit, mapped to 0–1024 via Bézier curve (Windows Ink scale) |
+| Pressure | 0 – 4095 | 12-bit, mapped to 0–1024 via shaping curve (Windows Ink scale) |
 | Distance | 0 – 255 | Hover height above surface |
 | Tilt X/Y | −9000 – 9000 | Firmware units, mapped to ±90° |
 
