@@ -50,12 +50,11 @@ jobs:
           -p:InvariantGlobalization=true
           -o publish/cli
 
-      - name: Publish App (self-contained trimmed)
+      - name: Publish App (self-contained)
         run: >
           dotnet publish src/RemarkableTablet.App
           -c Release -r win-x64
           -p:SelfContained=true
-          -p:PublishTrimmed=true
           -p:PublishSingleFile=true
           -o publish/app
 
