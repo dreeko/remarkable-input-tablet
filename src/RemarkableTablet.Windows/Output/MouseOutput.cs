@@ -10,7 +10,7 @@ namespace RemarkableTablet.Windows.Output;
 /// </summary>
 public sealed class MouseOutput : IOutputMode
 {
-    private bool _wasTouch;
+    private bool _wasInContact;
 
     public void Initialize() { }
 
@@ -18,18 +18,22 @@ public sealed class MouseOutput : IOutputMode
     {
         User32.SetCursorPos(frame.ScreenX, frame.ScreenY);
 
-        if (frame.IsTouch && !_wasTouch)
+        // BTN_TOUCH does not fire reliably on the rM2; treat any non-zero pressure
+        // as contact too, matching WindowsInkOutput.
+        var inContact = frame.IsTouch || frame.Pressure > 0;
+
+        if (inContact && !_wasInContact)
             User32.mouse_event(User32.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
-        else if (!frame.IsTouch && _wasTouch)
+        else if (!inContact && _wasInContact)
             User32.mouse_event(User32.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
 
-        _wasTouch = frame.IsTouch;
+        _wasInContact = inContact;
     }
 
     public void Dispose()
     {
         // Ensure pen-up on exit
-        if (_wasTouch)
+        if (_wasInContact)
             User32.mouse_event(User32.MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
     }
 }

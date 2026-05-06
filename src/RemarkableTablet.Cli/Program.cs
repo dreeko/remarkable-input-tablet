@@ -37,6 +37,10 @@ if (password is null && keyPath is null)
 // ── Resolve screen dimensions ─────────────────────────────────────────────────
 int screenW, screenH;
 #if WINDOWS_PLATFORM
+// Declare per-monitor DPI awareness before querying screen metrics — otherwise
+// GetSystemMetrics returns scaled pixels on high-DPI displays.
+ScreenMetrics.EnablePerMonitorDpiAwareness();
+
 if (widthArg > 0 && heightArg > 0)
 {
     (screenW, screenH) = (widthArg, heightArg);
@@ -63,7 +67,7 @@ else
 // ── Build pipeline ────────────────────────────────────────────────────────────
 var connOpts = keyPath is not null
     ? ConnectionOptions.WithKey(keyPath, address)
-    : ConnectionOptions.WithPassword(password, address);
+    : ConnectionOptions.WithPassword(password!, address);
 
 var orient = orientation.ToLowerInvariant() switch
 {
@@ -94,6 +98,12 @@ transport.StateChanged += state =>
 };
 
 await using var pipeline = new TabletPipeline(transport, mapper, output);
+pipeline.Error += ex =>
+{
+    Console.ForegroundColor = ConsoleColor.Red;
+    Console.Error.WriteLine($"[{DateTime.Now:HH:mm:ss}] Error: {ex.Message}");
+    Console.ResetColor();
+};
 
 // ── Shutdown on Ctrl-C ───────────────────────────────────────────────────────
 Console.CancelKeyPress += (_, e) =>

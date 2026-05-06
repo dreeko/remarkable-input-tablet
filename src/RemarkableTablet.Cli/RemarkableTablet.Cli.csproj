@@ -1,33 +1,33 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <OutputType>Exe</OutputType>
+        <!-- Multi-targeted so cross-publishing works regardless of build host:
+               dotnet publish -c Release -r win-x64   -f net10.0-windows -p:PublishAot=true
+               dotnet publish -c Release -r linux-x64 -f net10.0          -p:PublishAot=true
+             The -f flag is required because publish doesn't infer TFM from RID. -->
+        <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <!-- Windows: dotnet publish -c Release -r win-x64  /p:PublishAot=true -->
-        <!-- Linux:   dotnet publish -c Release -r linux-x64 /p:PublishAot=true -->
         <AssemblyName>remtablet</AssemblyName>
         <PublishAot>true</PublishAot>
         <InvariantGlobalization>true</InvariantGlobalization>
     </PropertyGroup>
 
-    <!-- TFM and defines are set per build host so project references resolve correctly -->
-    <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
-        <TargetFramework>net10.0-windows</TargetFramework>
+    <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
         <DefineConstants>$(DefineConstants);WINDOWS_PLATFORM</DefineConstants>
     </PropertyGroup>
-    <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
-        <TargetFramework>net10.0</TargetFramework>
+    <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
         <DefineConstants>$(DefineConstants);LINUX_PLATFORM</DefineConstants>
     </PropertyGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\RemarkableTablet.Core\RemarkableTablet.Core.csproj"/>
     </ItemGroup>
-    <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
         <ProjectReference Include="..\RemarkableTablet.Windows\RemarkableTablet.Windows.csproj"/>
     </ItemGroup>
-    <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
         <ProjectReference Include="..\RemarkableTablet.Linux\RemarkableTablet.Linux.csproj"/>
     </ItemGroup>
 </Project>

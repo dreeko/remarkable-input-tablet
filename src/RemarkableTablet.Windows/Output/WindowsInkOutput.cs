@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using RemarkableTablet.Core.Output;
 using RemarkableTablet.Windows.Interop;
@@ -18,6 +19,7 @@ public sealed class WindowsInkOutput : IOutputMode
     private IntPtr _device = IntPtr.Zero;
     private uint _frameId;
     private bool _wasInContact;
+    private bool _isFirstFrame = true;
 
     public void Initialize()
     {
@@ -36,9 +38,17 @@ public sealed class WindowsInkOutput : IOutputMode
     {
         if (_device == IntPtr.Zero) return;
 
+        var inContact = frame.IsTouch || frame.Pressure > 0;
+
+        // Skip frames that have nothing to report: pen fully out of range and was
+        // already up. Injecting an Update flag with no InRange/InContact/Up/Down
+        // accompanying flag is rejected by the OS.
+        if (!frame.InRange && !_wasInContact && !_isFirstFrame)
+            return;
+
         _frameId++;
 
-        var flags = BuildPointerFlags(frame);
+        var flags = BuildPointerFlags(frame, inContact);
         var pen = BuildPenFlags(frame);
 
         var typeInfo = new POINTER_TYPE_INFO
@@ -63,9 +73,11 @@ public sealed class WindowsInkOutput : IOutputMode
             }
         };
 
-        User32.InjectSyntheticPointerInput(_device, in typeInfo, 1);
+        if (!User32.InjectSyntheticPointerInput(_device, in typeInfo, 1))
+            Trace.WriteLine($"InjectSyntheticPointerInput rejected: flags={flags} err={Marshal.GetLastWin32Error()}");
 
-        _wasInContact = frame.IsTouch || frame.Pressure > 0;
+        _wasInContact = inContact;
+        _isFirstFrame = false;
     }
 
     public void Dispose()
@@ -83,7 +95,7 @@ public sealed class WindowsInkOutput : IOutputMode
                     pointerInfo = new POINTER_INFO
                     {
                         pointerType = User32.PT_PEN,
-                        pointerFlags = PointerFlags.Up
+                        pointerFlags = PointerFlags.Up | PointerFlags.Primary
                     },
                     penMask = PenMask.Pressure,
                     pressure = 0
@@ -96,25 +108,35 @@ public sealed class WindowsInkOutput : IOutputMode
         _device = IntPtr.Zero;
     }
 
-    private PointerFlags BuildPointerFlags(MappedFrame frame)
+    private PointerFlags BuildPointerFlags(MappedFrame frame, bool inContact)
     {
+        // Primary on every frame; New only on the very first inject after Initialize.
+        var baseFlags = PointerFlags.Primary;
+        if (_isFirstFrame) baseFlags |= PointerFlags.New;
+
         if (!frame.InRange)
-            return _wasInContact ? PointerFlags.Up : PointerFlags.Update;
+        {
+            // Pen left the digitizer entirely. If we were in contact, emit Up;
+            // otherwise the early-return in Send() already handled the no-op case.
+            return baseFlags | PointerFlags.Up;
+        }
 
-        var flags = PointerFlags.InRange;
+        var flags = baseFlags | PointerFlags.InRange;
 
-        if (frame.IsTouch || frame.Pressure > 0)
+        if (inContact)
         {
             flags |= PointerFlags.InContact;
             flags |= _wasInContact ? PointerFlags.Update : PointerFlags.Down;
         }
         else if (_wasInContact)
         {
-            // Pen lifted — emit UP but keep InRange (still hovering)
-            flags = PointerFlags.Up | PointerFlags.InRange;
+            // Pen lifted — emit Up but keep InRange (still hovering)
+            flags = baseFlags | PointerFlags.Up | PointerFlags.InRange;
         }
         else
+        {
             flags |= PointerFlags.Update; // hovering
+        }
 
         return flags;
     }

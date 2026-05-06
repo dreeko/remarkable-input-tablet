@@ -13,6 +13,7 @@ namespace RemarkableTablet.Core.Pipeline;
 ///     Reconnects automatically on disconnect with exponential backoff.
 ///     Emits a synthetic pen-up before each reconnection attempt so drawing
 ///     applications don't get a stuck pen-down state.
+///     Ownership: pipeline disposes the SshTransport and the IOutputMode passed in.
 /// </summary>
 public sealed class TabletPipeline : IAsyncDisposable
 {
@@ -42,6 +43,13 @@ public sealed class TabletPipeline : IAsyncDisposable
 
     public event Action<ConnectionState>? ConnectionStateChanged;
 
+    /// <summary>
+    ///     Raised when the pipeline catches an exception while running. Gives
+    ///     callers (CLI / App) a chance to surface the failure instead of having
+    ///     it disappear into the reconnect loop.
+    /// </summary>
+    public event Action<Exception>? Error;
+
     public async Task RunAsync()
     {
         var ct = _cts.Token;
@@ -61,9 +69,10 @@ public sealed class TabletPipeline : IAsyncDisposable
             {
                 break;
             }
-            catch
+            catch (Exception ex)
             {
-                // Connection or auth error — fall through to reconnect path
+                // Connection or auth error — surface to listeners then fall through to reconnect.
+                Error?.Invoke(ex);
             }
 
             if (ct.IsCancellationRequested) break;
@@ -94,13 +103,16 @@ public sealed class TabletPipeline : IAsyncDisposable
     {
         await _transport.ConnectAsync(ct);
 
-        var evdevChannel = Channel.CreateBounded<EvdevEvent>(new BoundedChannelOptions(512)
+        // Evdev events are 6 bytes each at ~100 Hz — unbounded is cheap and avoids
+        // mid-frame event loss that would corrupt the next emitted PenFrame.
+        var evdevChannel = Channel.CreateUnbounded<EvdevEvent>(new UnboundedChannelOptions
         {
-            FullMode = BoundedChannelFullMode.DropOldest,
             SingleReader = true,
             SingleWriter = true
         });
 
+        // Frame-level drop-oldest is fine: a dropped PenFrame is just a skipped
+        // sample. We never drop mid-frame.
         var frameChannel = Channel.CreateBounded<PenFrame>(new BoundedChannelOptions(64)
         {
             FullMode = BoundedChannelFullMode.DropOldest,
@@ -132,11 +144,16 @@ public sealed class TabletPipeline : IAsyncDisposable
             _output.Send(new MappedFrame(0, 0, 0, 0, 0,
                 false, false, false, false));
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Error?.Invoke(ex);
+        }
     }
 
     public void Stop()
     {
-        _cts.Cancel();
+        // CTS may already be disposed if RunAsync has finished; tolerate that.
+        try { _cts.Cancel(); }
+        catch (ObjectDisposedException) { }
     }
 }

@@ -65,8 +65,10 @@ public sealed class TrayIcon : IDisposable
 
     public void TriggerAutoConnect(AppSettings settings)
     {
-        // Open the settings window so the user can supply their password,
-        // then auto-connect once it's provided.
+        // Open the settings window in auto-connect mode. We can't bypass the
+        // password prompt (we deliberately don't store passwords), but the
+        // window will auto-click Connect once the user types one and presses Enter.
+        _ = settings;
         OpenSettings(true);
     }
 
@@ -91,11 +93,11 @@ public sealed class TrayIcon : IDisposable
     {
         if (_notify is null || _statusItem is null) return;
 
-        // Must update WinForms controls — they're thread-safe for these properties,
-        // but dispatch anyway to be safe.
-        _app.Dispatcher.Invoke(() =>
+        // BeginInvoke (fire-and-forget) avoids deadlocking the pipeline thread if
+        // the UI thread is itself awaiting on related work.
+        _app.Dispatcher.BeginInvoke(() =>
         {
-            var (statusText, connecting) = state switch
+            var (statusText, _) = state switch
             {
                 ConnectionState.Connected => ("● Connected", false),
                 ConnectionState.Connecting => ("○ Connecting…", true),
@@ -111,6 +113,6 @@ public sealed class TrayIcon : IDisposable
 
     private void ExitApp()
     {
-        _app.Dispatcher.Invoke(() => _app.Shutdown());
+        _app.Dispatcher.BeginInvoke(() => _app.Shutdown());
     }
 }

@@ -159,7 +159,7 @@ dotnet test tests/RemarkableTablet.Core.Tests
 ### Publish CLI — Windows (NativeAOT, ~12 MB single file)
 
 ```powershell
-dotnet publish src/RemarkableTablet.Cli -c Release -r win-x64 `
+dotnet publish src/RemarkableTablet.Cli -c Release -r win-x64 -f net10.0-windows `
   -p:PublishAot=true -p:InvariantGlobalization=true -o out/cli
 ```
 
@@ -169,16 +169,20 @@ dotnet publish src/RemarkableTablet.Cli -c Release -r win-x64 `
 # Prerequisite: clang and zlib headers
 sudo apt-get install -y clang zlib1g-dev   # Debian/Ubuntu
 
-dotnet publish src/RemarkableTablet.Cli -c Release -r linux-x64 \
+dotnet publish src/RemarkableTablet.Cli -c Release -r linux-x64 -f net10.0 \
   -p:PublishAot=true -p:InvariantGlobalization=true -o out/cli
 ```
 
-### Publish GUI app — Windows (self-contained trimmed, ~35 MB single file)
+### Publish GUI app — Windows (self-contained single file, ~70 MB)
 
 ```powershell
 dotnet publish src/RemarkableTablet.App -c Release -r win-x64 `
-  -p:SelfContained=true -p:PublishTrimmed=true -p:PublishSingleFile=true -o out/app
+  -p:SelfContained=true -p:PublishSingleFile=true -o out/app
 ```
+
+> Trimming is intentionally **not** enabled: the tray icon uses `System.Windows.Forms.NotifyIcon`,
+> and WinForms is not trim-compatible (NETSDK1175). The CLI ships smaller because it uses
+> NativeAOT instead.
 
 ## Architecture
 
@@ -226,6 +230,12 @@ Digitizer confirmed via `evtest` on firmware version 1231:
 | Pressure | 0 – 4095 | 12-bit, mapped to 0–1024 via Bézier curve (Windows Ink scale) |
 | Distance | 0 – 255 | Hover height above surface |
 | Tilt X/Y | −9000 – 9000 | Firmware units, mapped to ±90° |
+
+> **Note on tilt:** the tilt vector is rotated by the same orientation transform as
+> position, but the sign convention vs. Windows Ink (positive tilt-X = pen leans
+> toward the +X screen axis) has not been empirically verified. If your brushes
+> highlight the wrong direction in non-Portrait orientations, the four cases in
+> `CoordinateMapper.RotateTilt` are the place to flip signs.
 
 ## License
 

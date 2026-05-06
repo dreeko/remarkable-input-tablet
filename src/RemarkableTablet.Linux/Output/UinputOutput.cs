@@ -81,6 +81,7 @@ public sealed class UinputOutput : IOutputMode
             if (_wasInRange)
             {
                 EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOUCH,       0);
+                EmitEvent(EvType.EV_KEY, BtnCode.BTN_STYLUS,      0);
                 EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOOL_PEN,    0);
                 EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOOL_RUBBER, 0);
                 EmitSyn();
@@ -108,7 +109,8 @@ public sealed class UinputOutput : IOutputMode
             EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOOL_RUBBER, 0);
         }
 
-        EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOUCH, frame.IsTouch || frame.Pressure > 0 ? 1 : 0);
+        EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOUCH,  frame.IsTouch || frame.Pressure > 0 ? 1 : 0);
+        EmitEvent(EvType.EV_KEY, BtnCode.BTN_STYLUS, frame.BarrelButton ? 1 : 0);
         EmitSyn();
     }
 
@@ -119,6 +121,7 @@ public sealed class UinputOutput : IOutputMode
         if (_wasInRange)
         {
             EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOUCH,       0);
+            EmitEvent(EvType.EV_KEY, BtnCode.BTN_STYLUS,      0);
             EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOOL_PEN,    0);
             EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOOL_RUBBER, 0);
             EmitSyn();

@@ -4,6 +4,7 @@ using RemarkableTablet.Core.Mapping;
 using RemarkableTablet.Core.Output;
 using RemarkableTablet.Core.Pipeline;
 using RemarkableTablet.Core.Transport;
+using RemarkableTablet.Windows.Interop;
 using RemarkableTablet.Windows.Output;
 using Application = System.Windows.Application;
 
@@ -37,6 +38,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
         WriteLog("OnStartup begin");
+        ScreenMetrics.EnablePerMonitorDpiAwareness();
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
         _trayIcon = new TrayIcon(this);
         _trayIcon.Initialize();
@@ -71,41 +73,44 @@ public partial class App : Application
         if (_pipeline is not null) return;
 
         var mapper = new CoordinateMapper(mappingOpts);
-        var output = outputMode == "mouse"
+        var output = outputMode == OutputModes.Mouse
             ? (IOutputMode)new MouseOutput()
             : new WindowsInkOutput();
         var transport = new SshTransport(connOpts);
 
-        _pipeline = new TabletPipeline(transport, mapper, output);
-        _pipeline.ConnectionStateChanged += OnPipelineStateChanged;
+        var pipeline = new TabletPipeline(transport, mapper, output);
+        pipeline.ConnectionStateChanged += OnPipelineStateChanged;
+        pipeline.Error += ex => WriteLog($"Pipeline error: {ex}");
 
-        _ = RunPipelineAsync();
+        _pipeline = pipeline;
+        _ = RunPipelineAsync(pipeline);
     }
 
     public void StopPipeline()
     {
-        _pipeline?.Stop();
-        // _pipeline is nulled inside RunPipelineAsync after the task completes
+        // Capture into a local so we can't race with RunPipelineAsync nulling the field.
+        var p = _pipeline;
+        p?.Stop();
     }
 
-    private async Task RunPipelineAsync()
+    private async Task RunPipelineAsync(TabletPipeline pipeline)
     {
         try
         {
-            await _pipeline!.RunAsync();
+            await pipeline.RunAsync();
         }
         catch (Exception ex)
         {
             WriteLog($"Pipeline error: {ex}");
         }
 
-        await _pipeline!.DisposeAsync();
+        await pipeline.DisposeAsync();
         _pipeline = null;
-        await Dispatcher.InvokeAsync(() => PipelineStateChanged?.Invoke(ConnectionState.Disconnected));
+        await Dispatcher.BeginInvoke(() => PipelineStateChanged?.Invoke(ConnectionState.Disconnected));
     }
 
     private void OnPipelineStateChanged(ConnectionState state)
     {
-        Dispatcher.Invoke(() => PipelineStateChanged?.Invoke(state));
+        Dispatcher.BeginInvoke(() => PipelineStateChanged?.Invoke(state));
     }
 }

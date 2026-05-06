@@ -10,19 +10,12 @@ namespace RemarkableTablet.App;
 /// </summary>
 public sealed class AppSettings
 {
-    // ── Persistence ──────────────────────────────────────────────────────────
     private static readonly string SettingsDir =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "remarkable-input-tablet");
 
     private static readonly string SettingsPath =
         Path.Combine(SettingsDir, "settings.json");
-
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
 
     public string Host { get; set; } = "10.11.99.1";
     public string Orientation { get; set; } = "Portrait";
@@ -37,11 +30,14 @@ public sealed class AppSettings
             if (File.Exists(SettingsPath))
             {
                 var json = File.ReadAllText(SettingsPath);
-                return JsonSerializer.Deserialize<AppSettings>(json, SerializerOptions)
+                return JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings)
                        ?? new AppSettings();
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            App.WriteLog($"AppSettings.Load failed: {ex.Message}");
+        }
 
         return new AppSettings();
     }
@@ -52,8 +48,15 @@ public sealed class AppSettings
         {
             Directory.CreateDirectory(SettingsDir);
             File.WriteAllText(SettingsPath,
-                JsonSerializer.Serialize(this, SerializerOptions));
+                JsonSerializer.Serialize(this, AppSettingsJsonContext.Default.AppSettings));
         }
-        catch { }
+        catch (Exception ex)
+        {
+            App.WriteLog($"AppSettings.Save failed: {ex.Message}");
+        }
     }
 }
+
+[JsonSourceGenerationOptions(WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
+[JsonSerializable(typeof(AppSettings))]
+internal partial class AppSettingsJsonContext : JsonSerializerContext;

@@ -54,15 +54,21 @@ public static class EvdevParser
 
     private static EvdevEvent Parse(ReadOnlySequence<byte> slice)
     {
-        // Copy to stack-allocated span to avoid heap allocation
-        Span<byte> span = stackalloc byte[EventSize];
-        slice.CopyTo(span);
+        // Hot path — no copy
+        if (slice.IsSingleSegment)
+            return ParseSpan(slice.FirstSpan);
 
+        Span<byte> scratch = stackalloc byte[EventSize];
+        slice.CopyTo(scratch);
+        return ParseSpan(scratch);
+    }
+
+    private static EvdevEvent ParseSpan(ReadOnlySpan<byte> span)
+    {
         // Skip sec (0..3) and usec (4..7) — not needed for injection
         var type = BinaryPrimitives.ReadUInt16LittleEndian(span[8..]);
         var code = BinaryPrimitives.ReadUInt16LittleEndian(span[10..]);
         var value = BinaryPrimitives.ReadInt32LittleEndian(span[12..]);
-
         return new EvdevEvent(type, code, value);
     }
 }

@@ -37,4 +37,13 @@ internal static class User32
 
     [DllImport("user32.dll")]
     internal static extern int GetSystemMetrics(int nIndex);
+
+    // DPI awareness — required for SM_CXSCREEN/SM_CYSCREEN to return native pixels
+    // on high-DPI displays. Without this the CLI sees scaled coordinates and the pen
+    // lands in the wrong place.
+    internal static readonly IntPtr DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = new(-4);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetProcessDpiAwarenessContext(IntPtr value);
 }

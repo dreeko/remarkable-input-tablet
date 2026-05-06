@@ -19,9 +19,13 @@ public class CoordinateMapperTests
         return new CoordinateMapper(opts, PressureCurve.Linear);
     }
 
-    private static PenFrame MakeFrame(int x, int y, int pressure = 0, bool touch = false, bool inRange = true)
+    private static PenFrame MakeFrame(
+        int x, int y,
+        int pressure = 0,
+        int tiltX = 0, int tiltY = 0,
+        bool touch = false, bool inRange = true)
     {
-        return new PenFrame(x, y, pressure, 0, 0, 0, touch, false, false, false, inRange);
+        return new PenFrame(x, y, pressure, tiltX, tiltY, 0, touch, false, false, false, inRange);
     }
 
     [Fact]
@@ -118,7 +122,7 @@ public class CoordinateMapperTests
     }
 
     [Fact]
-    public void PressureCurveSoft_BooststLowPressure()
+    public void PressureCurveSoft_BoostsLowPressure()
     {
         var opts = new MappingOptions
         {
@@ -128,12 +132,36 @@ public class CoordinateMapperTests
         var softMapper = new CoordinateMapper(opts, PressureCurve.Soft);
         var linMapper = new CoordinateMapper(opts, PressureCurve.Linear);
 
-        // At 25% pressure, soft curve should give higher output than linear
+        // At 25% input, soft curve should produce noticeably higher output than linear.
+        // Linear at t=0.25 ≈ 0.25 → ~256/1024.
+        // Soft   at t=0.25 (y1=0.40, y2=0.90) ≈ 0.311 → ~318/1024.
         var rawPressure = ReMarkable2Constants.PressureMax / 4;
         var softMapped = softMapper.Map(MakeFrame(0, 0, rawPressure));
         var linMapped = linMapper.Map(MakeFrame(0, 0, rawPressure));
 
-        Assert.True(softMapped.Pressure > linMapped.Pressure,
-            "Soft curve should produce higher pressure at low input");
+        Assert.InRange(linMapped.Pressure,  254u, 258u);
+        Assert.InRange(softMapped.Pressure, 315u, 322u);
     }
+
+    // ── Tilt rotation: tilt vector must rotate in lockstep with position ───────
+
+    // We pick a deliberately asymmetric raw tilt that produces (+90,0) after scaling
+    // (TiltX = +TiltXMax, TiltY = 0) so each orientation produces a distinct expected
+    // output. After ScaleTilt: (90, 0). After RotateTilt:
+    //   Portrait        → (0,  -90)
+    //   Landscape       → (-90, 0)
+    //   PortraitFlipped → (0,   90)
+    //   LandscapeFlip   → (90,  0)
+    private static (int X, int Y) TiltAfter(Orientation o)
+    {
+        var mapper = MakeMapper(o);
+        var f = MakeFrame(0, 0, tiltX: ReMarkable2Constants.TiltXMax, tiltY: 0);
+        var m = mapper.Map(f);
+        return (m.TiltX, m.TiltY);
+    }
+
+    [Fact] public void Tilt_PortraitRotates()         => Assert.Equal((0,  -90), TiltAfter(Orientation.Portrait));
+    [Fact] public void Tilt_LandscapeRotates()        => Assert.Equal((-90,  0), TiltAfter(Orientation.Landscape));
+    [Fact] public void Tilt_PortraitFlippedRotates()  => Assert.Equal((0,   90), TiltAfter(Orientation.PortraitFlipped));
+    [Fact] public void Tilt_LandscapeFlippedPasses()  => Assert.Equal((90,   0), TiltAfter(Orientation.LandscapeFlipped));
 }

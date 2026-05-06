@@ -7,8 +7,8 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <!-- Self-contained trimmed; WPF is not AOT-compatible.
-             Publish: dotnet publish -c Release -r win-x64 /p:SelfContained=true /p:PublishTrimmed=true /p:PublishSingleFile=true -->
+        <!-- Self-contained single-file (untrimmed): WinForms (NotifyIcon) blocks trimming.
+             Publish: dotnet publish -c Release -r win-x64 /p:SelfContained=true /p:PublishSingleFile=true -->
     </PropertyGroup>
     <ItemGroup>
         <ProjectReference Include="..\RemarkableTablet.Core\RemarkableTablet.Core.csproj"/>

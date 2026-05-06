@@ -47,13 +47,14 @@ public sealed class CoordinateMapper
         var sx = _opts.MonitorX + (int)(rx * _opts.MonitorW);
         var sy = _opts.MonitorY + (int)(ry * _opts.MonitorH);
 
-        // Pressure: tablet 0–4095 → normalised → Bézier curve → Windows 0–1024
+        // Pressure: tablet 0–4095 → normalised → curve → Windows 0–1024
         var normPressure = frame.Pressure / (double)ReMarkable2Constants.PressureMax;
         var wPressure = (uint)(_curve.Apply(normPressure) * ReMarkable2Constants.WindowsPressureMax);
 
-        // Tilt: rM2 units → degrees ±90
+        // Tilt: rM2 units → degrees ±90, then rotated to match the position transform.
         var tiltX = ScaleTilt(frame.TiltX, ReMarkable2Constants.TiltXMin, ReMarkable2Constants.TiltXMax);
         var tiltY = ScaleTilt(frame.TiltY, ReMarkable2Constants.TiltYMin, ReMarkable2Constants.TiltYMax);
+        (tiltX, tiltY) = RotateTilt(tiltX, tiltY, _opts.Orientation);
 
         return new MappedFrame(
             sx,
@@ -75,4 +76,21 @@ public sealed class CoordinateMapper
         return (int)(norm * (ReMarkable2Constants.WindowsTiltMax - ReMarkable2Constants.WindowsTiltMin)
                      + ReMarkable2Constants.WindowsTiltMin);
     }
+
+    /// <summary>
+    ///     Rotates the tilt vector in lockstep with the position transform applied above.
+    ///     Tilt-X in the tablet's frame is no longer tilt-X in the screen's frame once
+    ///     the device is rotated; brushes that key off tilt direction would otherwise
+    ///     be wrong in non-Portrait orientations.
+    ///     Sign convention follows Windows Ink (positive = pen leans toward +X / +Y axis).
+    ///     Convention may need empirical adjustment — see README "Hardware details".
+    /// </summary>
+    private static (int X, int Y) RotateTilt(int tx, int ty, Orientation o) => o switch
+    {
+        Orientation.Portrait         => (ty,  -tx),
+        Orientation.Landscape        => (-tx, -ty),
+        Orientation.PortraitFlipped  => (-ty,  tx),
+        Orientation.LandscapeFlipped => (tx,  ty),
+        _                            => (ty,  -tx)
+    };
 }

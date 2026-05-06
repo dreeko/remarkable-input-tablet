@@ -107,7 +107,8 @@ public class EvdevParserTests
         const string fixturePath = "../../../../../fixtures/pen_capture.bin";
         if (!File.Exists(fixturePath))
         {
-            // Skip if fixture not yet captured (Phase 0)
+            // Skip if fixture not yet captured (Phase 0). Print so CI surfaces it.
+            Console.WriteLine($"[skip] fixture not present at {fixturePath}");
             return;
         }
 
