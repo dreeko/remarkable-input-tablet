@@ -33,6 +33,18 @@ public sealed class PressureCurve
     /// <summary>Suppresses low-pressure response (heavier strokes feel firmer).</summary>
     public static PressureCurve Hard => new(0.10, 0.50);
 
+    /// <summary>
+    ///     Resolve a curve by name (case-insensitive). Unknown / null / empty
+    ///     values fall back to <see cref="Linear" />.
+    ///     Names: <c>linear</c>, <c>soft</c>, <c>hard</c>.
+    /// </summary>
+    public static PressureCurve FromName(string? name) => (name ?? "").Trim().ToLowerInvariant() switch
+    {
+        "soft" => Soft,
+        "hard" => Hard,
+        _      => Linear
+    };
+
     /// <summary>Maps input pressure t∈[0,1] to output pressure∈[0,1].</summary>
     public double Apply(double t)
     {

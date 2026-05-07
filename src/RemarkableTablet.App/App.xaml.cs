@@ -68,11 +68,12 @@ public partial class App : Application
         catch { }
     }
 
-    public void StartPipeline(ConnectionOptions connOpts, MappingOptions mappingOpts, string outputMode, bool gestures = false)
+    public void StartPipeline(ConnectionOptions connOpts, MappingOptions mappingOpts, string outputMode,
+        bool gestures = false, string? pressureCurve = null)
     {
         if (_pipeline is not null) return;
 
-        var mapper = new CoordinateMapper(mappingOpts);
+        var mapper = new CoordinateMapper(mappingOpts, PressureCurve.FromName(pressureCurve));
         var output = outputMode == OutputModes.Mouse
             ? (IOutputMode)new MouseOutput()
             : new WindowsInkOutput();

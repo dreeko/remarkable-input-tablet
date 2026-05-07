@@ -16,6 +16,7 @@ var keyPath     = GetArg(args, "--key",         null);
 var orientation = GetArg(args, "--orientation", "portrait")!;
 var outputMode  = GetArg(args, "--output",      "ink")!;
 var gestures    = GetArg(args, "--gestures",    "off")!;
+var pressure    = GetArg(args, "--pressure",    "linear")!;
 var debug       = args.Contains("--debug");
 
 var widthArg  = ParseInt(GetArg(args, "--width",  null));
@@ -27,9 +28,9 @@ if (password is null && keyPath is null)
     await Console.Error.WriteLineAsync();
     await Console.Error.WriteLineAsync("Usage:");
 #if WINDOWS_PLATFORM
-    await Console.Error.WriteLineAsync("  remtablet --password <pw> [--address <ip>] [--orientation portrait|landscape] [--output ink|mouse] [--width <px>] [--height <px>] [--debug]");
+    await Console.Error.WriteLineAsync("  remtablet --password <pw> [--address <ip>] [--orientation portrait|landscape] [--output ink|mouse] [--pressure linear|soft|hard] [--gestures touch|off] [--width <px>] [--height <px>] [--debug]");
 #else
-    await Console.Error.WriteLineAsync("  remtablet --password <pw> [--address <ip>] [--orientation portrait|landscape] [--width <px>] [--height <px>] [--debug]");
+    await Console.Error.WriteLineAsync("  remtablet --password <pw> [--address <ip>] [--orientation portrait|landscape] [--pressure linear|soft|hard] [--gestures touch|off] [--width <px>] [--height <px>] [--debug]");
 #endif
     await Console.Error.WriteLineAsync("  remtablet --key <path/to/id_rsa> [--address <ip>]");
     return 1;
@@ -79,7 +80,8 @@ var orient = orientation.ToLowerInvariant() switch
 };
 
 var mappingOpts = MappingOptions.ForScreen(screenW, screenH, orient);
-var mapper      = new CoordinateMapper(mappingOpts);
+var curve       = PressureCurve.FromName(pressure);
+var mapper      = new CoordinateMapper(mappingOpts, curve);
 
 IOutputMode output;
 #if WINDOWS_PLATFORM

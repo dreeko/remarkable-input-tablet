@@ -65,11 +65,28 @@
 
         <!-- Output -->
         <GroupBox Grid.Row="2" Header="Output Mode" Margin="0,0,0,8">
-            <StackPanel Margin="8">
-                <RadioButton x:Name="InkRadio" Content="Windows Ink (Krita, Photoshop 2018+, Affinity)"
-                             IsChecked="True" />
-                <RadioButton x:Name="MouseRadio" Content="Mouse (no pressure — for testing only)" Margin="0,4,0,0" />
-            </StackPanel>
+            <Grid Margin="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="100" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2">
+                    <RadioButton x:Name="InkRadio" Content="Windows Ink (Krita, Photoshop 2018+, Affinity)"
+                                 IsChecked="True" />
+                    <RadioButton x:Name="MouseRadio" Content="Mouse (no pressure — for testing only)" Margin="0,4,0,0" />
+                </StackPanel>
+                <Label Grid.Row="2" Grid.Column="0" Content="Pressure:" VerticalAlignment="Center" Margin="0,8,0,0" />
+                <ComboBox Grid.Row="2" Grid.Column="1" x:Name="PressureBox" Margin="0,8,0,0" SelectedIndex="0">
+                    <ComboBoxItem>Linear (default)</ComboBoxItem>
+                    <ComboBoxItem>Soft (boost light strokes)</ComboBoxItem>
+                    <ComboBoxItem>Hard (suppress light strokes)</ComboBoxItem>
+                </ComboBox>
+            </Grid>
         </GroupBox>
 
         <!-- Touch gestures -->

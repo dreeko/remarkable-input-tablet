@@ -165,4 +165,34 @@ public class CoordinateMapperTests
     [Fact] public void Tilt_LandscapeRotates()        => Assert.Equal((90,    0), TiltAfter(Orientation.Landscape));
     [Fact] public void Tilt_PortraitFlippedRotates()  => Assert.Equal((0,   -90), TiltAfter(Orientation.PortraitFlipped));
     [Fact] public void Tilt_LandscapeFlippedPasses()  => Assert.Equal((-90,   0), TiltAfter(Orientation.LandscapeFlipped));
+
+    // ── PressureCurve.FromName ────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("linear")]
+    [InlineData("Linear")]
+    [InlineData("LINEAR")]
+    [InlineData("")]
+    [InlineData(null)]
+    [InlineData("unknown-name")]
+    public void PressureCurveFromName_DefaultsToLinearForUnknownValues(string? name)
+    {
+        var curve = PressureCurve.FromName(name);
+        // Linear curve maps t to t exactly (within float precision).
+        Assert.Equal(0.5, curve.Apply(0.5), precision: 6);
+    }
+
+    [Fact]
+    public void PressureCurveFromName_SoftBoostsLowPressure()
+    {
+        var curve = PressureCurve.FromName("soft");
+        Assert.True(curve.Apply(0.25) > 0.30, "soft curve should boost t=0.25 above linear");
+    }
+
+    [Fact]
+    public void PressureCurveFromName_HardSuppressesLowPressure()
+    {
+        var curve = PressureCurve.FromName("hard");
+        Assert.True(curve.Apply(0.25) < 0.20, "hard curve should suppress t=0.25 below linear");
+    }
 }

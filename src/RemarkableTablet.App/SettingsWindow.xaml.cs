@@ -58,6 +58,12 @@ public partial class SettingsWindow : Window
         };
         InkRadio.IsChecked = s.OutputMode != OutputModes.Mouse;
         MouseRadio.IsChecked = s.OutputMode == OutputModes.Mouse;
+        PressureBox.SelectedIndex = s.PressureCurve switch
+        {
+            "soft" => 1,
+            "hard" => 2,
+            _      => 0
+        };
         GesturesBox.IsChecked = s.Gestures == "touch";
         AutoConnectBox.IsChecked = s.AutoConnect;
 
@@ -78,6 +84,12 @@ public partial class SettingsWindow : Window
             _ => "Portrait"
         };
         s.OutputMode = MouseRadio.IsChecked == true ? OutputModes.Mouse : OutputModes.Ink;
+        s.PressureCurve = PressureBox.SelectedIndex switch
+        {
+            1 => "soft",
+            2 => "hard",
+            _ => "linear"
+        };
         s.Gestures = GesturesBox.IsChecked == true ? "touch" : "off";
         s.AutoConnect = AutoConnectBox.IsChecked == true;
         s.Save();
@@ -118,6 +130,12 @@ public partial class SettingsWindow : Window
             _ => TabletOrientation.Portrait
         };
         var outputMode = MouseRadio.IsChecked == true ? OutputModes.Mouse : OutputModes.Ink;
+        var pressureCurve = PressureBox.SelectedIndex switch
+        {
+            1 => "soft",
+            2 => "hard",
+            _ => "linear"
+        };
         var gestures = GesturesBox.IsChecked == true;
 
         var connOpts = ConnectionOptions.WithPassword(password, address);
@@ -131,7 +149,7 @@ public partial class SettingsWindow : Window
         };
 
         SetStatus("Connecting…");
-        AppInstance.StartPipeline(connOpts, mappingOpts, outputMode, gestures);
+        AppInstance.StartPipeline(connOpts, mappingOpts, outputMode, gestures, pressureCurve);
     }
 
     private void Disconnect_Click(object sender, RoutedEventArgs e)

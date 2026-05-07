@@ -26,6 +26,9 @@ public sealed class AppSettings
     /// <summary>"off" or "touch". Defaults to off so existing users see no behavior change on upgrade.</summary>
     public string Gestures { get; set; } = "off";
 
+    /// <summary>"linear" (default), "soft" (boost light strokes), or "hard" (suppress light strokes).</summary>
+    public string PressureCurve { get; set; } = "linear";
+
     public static AppSettings Load()
     {
         try

@@ -28,7 +28,7 @@ Download `RemtabletApp-*.zip` from Releases, extract, run `RemarkableTablet.App.
 
 The app lives in the system tray. Right-click → **Connect...** to open Settings, enter your device IP and root password, and click **Connect**.
 
-The Settings dialog also exposes a **Touch Gestures** checkbox to enable pinch / pan / rotate from the rM2 touchscreen — see the [Touch gestures](#touch-gestures) section below.
+The Settings dialog also exposes a **Touch Gestures** checkbox to enable pinch / pan / rotate from the rM2 touchscreen (see the [Touch gestures](#touch-gestures) section), and a **Pressure** dropdown to pick between Linear, Soft (boosts light strokes), and Hard (suppresses light strokes) response curves.
 
 ### Windows — CLI
 
@@ -71,6 +71,7 @@ Press **Ctrl-C** to stop.
 | `--height <px>` | auto (Windows) / 1080 (Linux) | Screen height in pixels |
 | `--debug` | off | Print pipeline stage info on startup |
 | `--gestures <value>` | `off` | `touch` (inject multi-touch contacts for pinch / pan / rotate) or `off`. The rM2 firmware suppresses touch while the pen is in proximity, so two-finger gestures only register when the pen is set aside. |
+| `--pressure <value>` | `linear` | Pressure response curve. `linear` (1:1), `soft` (boosts light strokes — pen feels lighter), or `hard` (suppresses light strokes — pen feels stiffer). |
 
 ## Orientation
 
