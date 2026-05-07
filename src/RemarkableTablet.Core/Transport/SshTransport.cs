@@ -88,17 +88,20 @@ public sealed class SshTransport : IAsyncDisposable
         //   1. Dispose every SshCommand first — closes each OutputStream, which
         //      is what unblocks the blocking stream.Read() in each pump task.
         //      Disconnecting the SshClient alone does not reliably unblock them.
-        //   2. Then disconnect and dispose the client.
-        //   3. Then await every pump task so the writers are fully completed
-        //      before the next ConnectAsync re-opens.
+        //   2. Await every pump task with a timeout so the writers are fully
+        //      completed (or we move on) before tearing down the client.
+        //   3. Then disconnect and dispose the client. Doing this last avoids
+        //      Disconnect blocking on still-active channels — if the pumps
+        //      have all exited, every channel is closed by then.
         foreach (var s in _streams)
             s.DisposeCommand();
 
-        _client?.Disconnect();
-        _client?.Dispose();
-
+        var pumpTimeout = TimeSpan.FromSeconds(3);
         foreach (var s in _streams)
-            await s.AwaitPumpAsync();
+            await s.AwaitPumpAsync(pumpTimeout);
+
+        try { _client?.Disconnect(); } catch { /* best-effort */ }
+        _client?.Dispose();
 
         _streams.Clear();
         _client = null;

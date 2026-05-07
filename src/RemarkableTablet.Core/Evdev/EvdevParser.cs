@@ -49,6 +49,13 @@ public static class EvdevParser
         finally
         {
             output.TryComplete();
+            // Signal the pump (PipeWriter side) that no more reads will happen.
+            // Without this, a pump blocked in FlushAsync waiting for the reader
+            // to drain has no way to know the reader has gone away — it would
+            // only unblock when the underlying SshCommand is disposed. Completing
+            // the reader makes the next FlushAsync return IsCompleted=true so
+            // the pump exits cleanly.
+            try { reader.Complete(); } catch { /* idempotent — already completed */ }
         }
     }
 

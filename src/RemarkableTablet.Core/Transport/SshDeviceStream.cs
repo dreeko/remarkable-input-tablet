@@ -38,15 +38,32 @@ public sealed class SshDeviceStream
     ///     Disposes the underlying SshCommand. This closes its OutputStream,
     ///     which is what unblocks the blocking <c>stream.Read()</c> inside
     ///     <see cref="PumpBlocking" />. Disconnecting the SSH client alone
-    ///     does not reliably unblock it in SSH.NET.
+    ///     does not reliably unblock it in SSH.NET. Swallows exceptions —
+    ///     a misbehaving command should never block transport teardown.
     /// </summary>
-    internal void DisposeCommand() => _command.Dispose();
+    internal void DisposeCommand()
+    {
+        try { _command.Dispose(); }
+        catch { /* best-effort — we're tearing down anyway */ }
+    }
 
-    internal Task AwaitPumpAsync() =>
-        _pumpTask.ContinueWith(_ => { },
+    /// <summary>
+    ///     Awaits the pump task with a timeout. If the pump is wedged
+    ///     (e.g. SSH.NET failed to propagate command Dispose to the
+    ///     underlying PipeStream and Read is stuck), we'd rather move
+    ///     on and let the orphaned task be GC'd than hang the GUI.
+    /// </summary>
+    internal async Task AwaitPumpAsync(TimeSpan timeout)
+    {
+        var task = _pumpTask.ContinueWith(_ => { },
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
+        var winner = await Task.WhenAny(task, Task.Delay(timeout));
+        // If timeout won, the pump task is still alive but unreachable
+        // from our perspective; nothing useful to do. Caller proceeds.
+        _ = winner;
+    }
 
     private void PumpBlocking(PipeWriter writer, CancellationToken ct)
     {
