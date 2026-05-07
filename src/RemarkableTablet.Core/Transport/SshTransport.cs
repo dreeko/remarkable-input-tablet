@@ -5,21 +5,20 @@ using Renci.SshNet;
 namespace RemarkableTablet.Core.Transport;
 
 /// <summary>
-///     SSH transport that streams /dev/input/event1 from the rM2 into a PipeReader.
-///     Uses BeginExecute + OutputStream for continuous binary streaming.
-///     OutputStream is a PipeStream whose Read() blocks until data arrives.
-///     The blocking read runs on a thread-pool thread so it does not starve the
-///     async pipeline.
-///     ConnectAsync may be called multiple times (e.g. after reconnection); each
-///     call cleans up the previous connection before establishing a new one.
+///     SSH transport that owns one SshClient and zero-or-more
+///     <see cref="SshDeviceStream" />s on it (one per evdev device — pen on
+///     event1, touchscreen on event2). Each stream decodes blocking
+///     OutputStream bytes into a PipeReader on a thread-pool thread.
+///     ConnectAsync may be called multiple times (e.g. after reconnection);
+///     each call cleans up the previous connection's streams + client before
+///     establishing a new one. Callers must re-open streams after each
+///     reconnect — open streams from the previous session do not carry over.
 /// </summary>
 public sealed class SshTransport : IAsyncDisposable
 {
     private readonly ConnectionOptions _opts;
+    private readonly List<SshDeviceStream> _streams = new();
     private SshClient? _client;
-    private SshCommand? _command;
-    private Pipe? _pipe;
-    private Task? _pumpTask;
 
     public SshTransport(ConnectionOptions opts)
     {
@@ -42,51 +41,34 @@ public sealed class SshTransport : IAsyncDisposable
         _client = BuildClient();
         await Task.Run(() => _client.Connect(), ct);
 
-        _pipe = new Pipe(new PipeOptions(
-            pauseWriterThreshold: 64 * 1024,
-            resumeWriterThreshold: 32 * 1024));
-
-        _command = _client.CreateCommand($"cat {ReMarkable2Constants.PenDevicePath}");
-        _command.BeginExecute(null, null);
-
-        _pumpTask = Task.Run(() => PumpBlocking(_pipe.Writer, ct));
-
         StateChanged?.Invoke(ConnectionState.Connected);
     }
 
-    public PipeReader GetReader()
+    /// <summary>
+    ///     Opens a `cat &lt;devicePath&gt;` stream on the connected client.
+    ///     Multiple streams may be opened concurrently — SSH.NET handles
+    ///     each as a separate channel under the same SSH session.
+    /// </summary>
+    public SshDeviceStream OpenStream(string devicePath, CancellationToken ct)
     {
-        if (_pipe is null) throw new InvalidOperationException("Not connected. Call ConnectAsync first.");
-        return _pipe.Reader;
+        if (_client is null)
+            throw new InvalidOperationException("Not connected. Call ConnectAsync first.");
+
+        var stream = new SshDeviceStream(_client, devicePath, ct);
+        _streams.Add(stream);
+        return stream;
     }
 
-    private void PumpBlocking(PipeWriter writer, CancellationToken ct)
+    /// <summary>
+    ///     Backwards-compatible convenience: opens the pen device stream if
+    ///     not already open, and returns its reader. Existing single-stream
+    ///     callers (EventDiagnostics, legacy paths) keep working.
+    /// </summary>
+    public PipeReader GetReader()
     {
-        var stream = _command!.OutputStream;
-        var buf = new byte[4096];
-        Exception? fault = null;
-        try
-        {
-            while (!ct.IsCancellationRequested)
-            {
-                var read = stream.Read(buf, 0, buf.Length);
-                if (read == 0) break;
-
-                var mem = writer.GetMemory(read);
-                buf.AsMemory(0, read).CopyTo(mem);
-                writer.Advance(read);
-
-                var flushTask = writer.FlushAsync(ct).AsTask();
-                flushTask.GetAwaiter().GetResult();
-                if (flushTask.Result.IsCompleted) break;
-            }
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex) { fault = ex; }
-        finally
-        {
-            writer.Complete(fault);
-        }
+        if (_streams.Count == 0)
+            OpenStream(ReMarkable2Constants.PenDevicePath, CancellationToken.None);
+        return _streams[0].Reader;
     }
 
     private SshClient BuildClient()
@@ -102,20 +84,23 @@ public sealed class SshTransport : IAsyncDisposable
 
     private async Task CleanupConnectionAsync()
     {
-        // Order matters: dispose the command first so its OutputStream is closed,
-        // which unblocks the blocking stream.Read() in PumpBlocking. Disconnecting
-        // the SSH client alone does not reliably unblock it in SSH.NET.
-        _command?.Dispose();
+        // Order matters (single-stream lesson, generalised to N):
+        //   1. Dispose every SshCommand first — closes each OutputStream, which
+        //      is what unblocks the blocking stream.Read() in each pump task.
+        //      Disconnecting the SshClient alone does not reliably unblock them.
+        //   2. Then disconnect and dispose the client.
+        //   3. Then await every pump task so the writers are fully completed
+        //      before the next ConnectAsync re-opens.
+        foreach (var s in _streams)
+            s.DisposeCommand();
+
         _client?.Disconnect();
         _client?.Dispose();
-        if (_pipe?.Writer is not null)
-            await _pipe.Writer.CompleteAsync();
-        if (_pumpTask is not null)
-            await _pumpTask.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
 
-        _pumpTask = null;
-        _command = null;
-        _pipe = null;
+        foreach (var s in _streams)
+            await s.AwaitPumpAsync();
+
+        _streams.Clear();
         _client = null;
     }
 }

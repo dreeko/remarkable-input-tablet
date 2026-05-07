@@ -9,11 +9,15 @@ namespace RemarkableTablet.Core.Pipeline;
 
 /// <summary>
 ///     Wires all pipeline stages together and owns the CancellationTokenSource.
-///     Pipeline: SshTransport → EvdevParser → TabletStateMachine → CoordinateMapper → IOutputMode
+///     Pen pipeline:   SshTransport(event1) → EvdevParser → TabletStateMachine → CoordinateMapper → IOutputMode
+///     Touch pipeline: SshTransport(event2) → EvdevParser → TouchStateMachine → TouchCoordinateMapper → ITouchOutput
+///                     (touch wiring is optional — pen-only operation is unchanged)
 ///     Reconnects automatically on disconnect with exponential backoff.
-///     Emits a synthetic pen-up before each reconnection attempt so drawing
-///     applications don't get a stuck pen-down state.
-///     Ownership: pipeline disposes the SshTransport and the IOutputMode passed in.
+///     Emits a synthetic pen-up and "all touch contacts released" before each
+///     reconnection attempt so drawing applications don't get stuck pen-down
+///     or stuck contacts.
+///     Ownership: pipeline disposes the SshTransport, the IOutputMode, and the
+///     ITouchOutput (if any) passed in.
 /// </summary>
 public sealed class TabletPipeline : IAsyncDisposable
 {
@@ -21,14 +25,26 @@ public sealed class TabletPipeline : IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly CoordinateMapper _mapper;
     private readonly IOutputMode _output;
+    private readonly TouchCoordinateMapper? _touchMapper;
+    private readonly ITouchOutput? _touchOutput;
 
     private readonly SshTransport _transport;
 
     public TabletPipeline(SshTransport transport, CoordinateMapper mapper, IOutputMode output)
+        : this(transport, mapper, output, null, null) { }
+
+    public TabletPipeline(
+        SshTransport transport,
+        CoordinateMapper mapper,
+        IOutputMode output,
+        TouchCoordinateMapper? touchMapper,
+        ITouchOutput? touchOutput)
     {
         _transport = transport;
         _output = output;
         _mapper = mapper;
+        _touchMapper = touchMapper;
+        _touchOutput = touchOutput;
 
         _transport.StateChanged += s => ConnectionStateChanged?.Invoke(s);
     }
@@ -38,6 +54,7 @@ public sealed class TabletPipeline : IAsyncDisposable
         await _cts.CancelAsync();
         await _transport.DisposeAsync();
         _output.Dispose();
+        _touchOutput?.Dispose();
         _cts.Dispose();
     }
 
@@ -56,6 +73,7 @@ public sealed class TabletPipeline : IAsyncDisposable
         var attempt = 0;
 
         _output.Initialize();
+        _touchOutput?.Initialize();
 
         while (!ct.IsCancellationRequested)
         {
@@ -77,8 +95,9 @@ public sealed class TabletPipeline : IAsyncDisposable
 
             if (ct.IsCancellationRequested) break;
 
-            // Unexpected disconnect: emit pen-up, wait with backoff, then retry.
+            // Unexpected disconnect: emit pen-up + all-touch-released, wait with backoff, then retry.
             EmitPenUp();
+            EmitTouchReleaseAll();
             ConnectionStateChanged?.Invoke(ConnectionState.Disconnected);
 
             // If we actually connected and ran (stream EOF), reset backoff;
@@ -103,36 +122,71 @@ public sealed class TabletPipeline : IAsyncDisposable
     {
         await _transport.ConnectAsync(ct);
 
-        // Evdev events are 6 bytes each at ~100 Hz — unbounded is cheap and avoids
-        // mid-frame event loss that would corrupt the next emitted PenFrame.
-        var evdevChannel = Channel.CreateUnbounded<EvdevEvent>(new UnboundedChannelOptions
+        var penStream = _transport.OpenStream(ReMarkable2Constants.PenDevicePath, ct);
+
+        // Pen channels — evdev events at ~100 Hz; unbounded is cheap and
+        // avoids mid-frame loss that would corrupt the next emitted PenFrame.
+        var penEvdevChannel = Channel.CreateUnbounded<EvdevEvent>(new UnboundedChannelOptions
         {
             SingleReader = true,
             SingleWriter = true
         });
 
-        // Frame-level drop-oldest is fine: a dropped PenFrame is just a skipped
-        // sample. We never drop mid-frame.
-        var frameChannel = Channel.CreateBounded<PenFrame>(new BoundedChannelOptions(64)
+        var penFrameChannel = Channel.CreateBounded<PenFrame>(new BoundedChannelOptions(64)
         {
             FullMode = BoundedChannelFullMode.DropOldest,
             SingleReader = true,
             SingleWriter = true
         });
 
-        await Task.WhenAll(
-            EvdevParser.RunAsync(_transport.GetReader(), evdevChannel.Writer, ct),
-            TabletStateMachine.RunAsync(evdevChannel.Reader, frameChannel.Writer, ct),
-            OutputLoopAsync(frameChannel.Reader, ct)
-        );
+        var tasks = new List<Task>(6)
+        {
+            EvdevParser.RunAsync(penStream.Reader, penEvdevChannel.Writer, ct),
+            TabletStateMachine.RunAsync(penEvdevChannel.Reader, penFrameChannel.Writer, ct),
+            PenOutputLoopAsync(penFrameChannel.Reader, ct)
+        };
+
+        if (_touchMapper is not null && _touchOutput is not null)
+        {
+            var touchStream = _transport.OpenStream(ReMarkable2Constants.TouchDevicePath, ct);
+
+            var touchEvdevChannel = Channel.CreateUnbounded<EvdevEvent>(new UnboundedChannelOptions
+            {
+                SingleReader = true,
+                SingleWriter = true
+            });
+
+            var touchFrameChannel = Channel.CreateBounded<TouchFrame>(new BoundedChannelOptions(64)
+            {
+                FullMode = BoundedChannelFullMode.DropOldest,
+                SingleReader = true,
+                SingleWriter = true
+            });
+
+            tasks.Add(EvdevParser.RunAsync(touchStream.Reader, touchEvdevChannel.Writer, ct));
+            tasks.Add(TouchStateMachine.RunAsync(touchEvdevChannel.Reader, touchFrameChannel.Writer, ct));
+            tasks.Add(TouchOutputLoopAsync(touchFrameChannel.Reader, ct));
+        }
+
+        await Task.WhenAll(tasks);
     }
 
-    private async Task OutputLoopAsync(ChannelReader<PenFrame> frames, CancellationToken ct)
+    private async Task PenOutputLoopAsync(ChannelReader<PenFrame> frames, CancellationToken ct)
     {
         try
         {
             await foreach (var frame in frames.ReadAllAsync(ct))
                 _output.Send(_mapper.Map(frame));
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task TouchOutputLoopAsync(ChannelReader<TouchFrame> frames, CancellationToken ct)
+    {
+        try
+        {
+            await foreach (var frame in frames.ReadAllAsync(ct))
+                _touchOutput!.Send(_touchMapper!.Map(frame));
         }
         catch (OperationCanceledException) { }
     }
@@ -143,6 +197,19 @@ public sealed class TabletPipeline : IAsyncDisposable
         {
             _output.Send(new MappedFrame(0, 0, 0, 0, 0,
                 false, false, false, false));
+        }
+        catch (Exception ex)
+        {
+            Error?.Invoke(ex);
+        }
+    }
+
+    private void EmitTouchReleaseAll()
+    {
+        if (_touchOutput is null) return;
+        try
+        {
+            _touchOutput.ReleaseAll();
         }
         catch (Exception ex)
         {

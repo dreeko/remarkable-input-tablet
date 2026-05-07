@@ -33,6 +33,14 @@ internal static class AbsCode
     internal const ushort ABS_PRESSURE = 24;
     internal const ushort ABS_TILT_X   = 26;
     internal const ushort ABS_TILT_Y   = 27;
+
+    // Multi-touch (MT-B slot protocol)
+    internal const ushort ABS_MT_SLOT        = 47;
+    internal const ushort ABS_MT_TOUCH_MAJOR = 48;
+    internal const ushort ABS_MT_POSITION_X  = 53;
+    internal const ushort ABS_MT_POSITION_Y  = 54;
+    internal const ushort ABS_MT_TRACKING_ID = 57;
+    internal const ushort ABS_MT_PRESSURE    = 58;
 }
 
 // ── input device properties ──────────────────────────────────────────────────

@@ -31,11 +31,13 @@ public class CoordinateMapperTests
     [Fact]
     public void PortraitOrigin_MapsToTopLeft()
     {
-        // ABS_X is the long axis (0=USB/bottom, PenXMax=top); ABS_Y is the short axis (0=left).
-        // Physical top-left = (ABS_X=PenXMax, ABS_Y=0).
-        // Formula (ny, 1-nx): rx=0, ry=1-1=0 → screen (0, 0).
+        // Pen aligned with touch (verified 2026-05-07):
+        //   ABS_X is the long axis  (0 = top in portrait, PenXMax = USB/bottom).
+        //   ABS_Y is the short axis (0 = right,           PenYMax = left).
+        // Physical top-left in portrait = (ABS_X=0, ABS_Y=PenYMax).
+        // Formula (1-ny, nx): rx=0, ry=0 → screen (0, 0).
         var mapper = MakeMapper(Orientation.Portrait);
-        var frame = MakeFrame(ReMarkable2Constants.PenXMax, 0);
+        var frame = MakeFrame(0, ReMarkable2Constants.PenYMax);
         var mapped = mapper.Map(frame);
         Assert.Equal(0, mapped.ScreenX);
         Assert.Equal(0, mapped.ScreenY);
@@ -64,16 +66,15 @@ public class CoordinateMapperTests
 
 
     // Orientation corner tests — each orientation maps one physical corner to screen (0,0).
-    // ABS_X = long axis (0=USB/bottom, PenXMax=top); ABS_Y = short axis (0=left, PenYMax=right).
+    // Pen aligned with touch: ABS_X long axis (0=top portrait); ABS_Y short axis (0=right portrait).
 
     [Fact]
     public void LandscapeOrigin_MapsToTopLeft()
     {
-        // Landscape = 90° CCW from portrait; USB/pen slot on the right.
-        // Physical top-left in landscape = (ABS_X=PenXMax, ABS_Y=PenYMax).
-        // Formula (1-nx, 1-ny): rx=0, ry=0 → screen (0,0).
+        // Landscape: pen slot on the right. Physical top-left = (ABS_X=0, ABS_Y=0).
+        // Formula (nx, ny): rx=0, ry=0 → screen (0,0).
         var mapper = MakeMapper(Orientation.Landscape);
-        var frame = MakeFrame(ReMarkable2Constants.PenXMax, ReMarkable2Constants.PenYMax);
+        var frame = MakeFrame(0, 0);
         var mapped = mapper.Map(frame);
         Assert.Equal(0, mapped.ScreenX);
         Assert.Equal(0, mapped.ScreenY);
@@ -83,10 +84,10 @@ public class CoordinateMapperTests
     public void PortraitFlippedOrigin_MapsToTopLeft()
     {
         // PortraitFlipped = 180° from portrait; USB at top.
-        // Physical top-left = (ABS_X=0, ABS_Y=PenYMax).
-        // Formula (1-ny, nx): rx=0, ry=0 → screen (0,0).
+        // Physical top-left = (ABS_X=PenXMax, ABS_Y=0).
+        // Formula (ny, 1-nx): rx=0, ry=0 → screen (0,0).
         var mapper = MakeMapper(Orientation.PortraitFlipped);
-        var frame = MakeFrame(0, ReMarkable2Constants.PenYMax);
+        var frame = MakeFrame(ReMarkable2Constants.PenXMax, 0);
         var mapped = mapper.Map(frame);
         Assert.Equal(0, mapped.ScreenX);
         Assert.Equal(0, mapped.ScreenY);
@@ -95,11 +96,11 @@ public class CoordinateMapperTests
     [Fact]
     public void LandscapeFlippedOrigin_MapsToTopLeft()
     {
-        // LandscapeFlipped = 90° CW from portrait; USB/pen slot on the left.
-        // Physical top-left = (ABS_X=0, ABS_Y=0).
-        // Formula (nx, ny): rx=0, ry=0 → screen (0,0).
+        // LandscapeFlipped: pen slot on the left.
+        // Physical top-left = (ABS_X=PenXMax, ABS_Y=PenYMax).
+        // Formula (1-nx, 1-ny): rx=0, ry=0 → screen (0,0).
         var mapper = MakeMapper(Orientation.LandscapeFlipped);
-        var frame = MakeFrame(0, 0);
+        var frame = MakeFrame(ReMarkable2Constants.PenXMax, ReMarkable2Constants.PenYMax);
         var mapped = mapper.Map(frame);
         Assert.Equal(0, mapped.ScreenX);
         Assert.Equal(0, mapped.ScreenY);
@@ -145,13 +146,13 @@ public class CoordinateMapperTests
 
     // ── Tilt rotation: tilt vector must rotate in lockstep with position ───────
 
-    // We pick a deliberately asymmetric raw tilt that produces (+90,0) after scaling
-    // (TiltX = +TiltXMax, TiltY = 0) so each orientation produces a distinct expected
-    // output. After ScaleTilt: (90, 0). After RotateTilt:
-    //   Portrait        → (0,  -90)
-    //   Landscape       → (-90, 0)
-    //   PortraitFlipped → (0,   90)
-    //   LandscapeFlip   → (90,  0)
+    // Raw tilt (TiltXMax, 0) → after ScaleTilt: (90, 0). After RotateTilt
+    // (rotated 180° vs. previous convention so the tilt vector follows the
+    // position transform that aligns with touch):
+    //   Portrait        → (0,   90)
+    //   Landscape       → (90,  0)
+    //   PortraitFlipped → (0,  -90)
+    //   LandscapeFlip   → (-90, 0)
     private static (int X, int Y) TiltAfter(Orientation o)
     {
         var mapper = MakeMapper(o);
@@ -160,8 +161,8 @@ public class CoordinateMapperTests
         return (m.TiltX, m.TiltY);
     }
 
-    [Fact] public void Tilt_PortraitRotates()         => Assert.Equal((0,  -90), TiltAfter(Orientation.Portrait));
-    [Fact] public void Tilt_LandscapeRotates()        => Assert.Equal((-90,  0), TiltAfter(Orientation.Landscape));
-    [Fact] public void Tilt_PortraitFlippedRotates()  => Assert.Equal((0,   90), TiltAfter(Orientation.PortraitFlipped));
-    [Fact] public void Tilt_LandscapeFlippedPasses()  => Assert.Equal((90,   0), TiltAfter(Orientation.LandscapeFlipped));
+    [Fact] public void Tilt_PortraitRotates()         => Assert.Equal((0,    90), TiltAfter(Orientation.Portrait));
+    [Fact] public void Tilt_LandscapeRotates()        => Assert.Equal((90,    0), TiltAfter(Orientation.Landscape));
+    [Fact] public void Tilt_PortraitFlippedRotates()  => Assert.Equal((0,   -90), TiltAfter(Orientation.PortraitFlipped));
+    [Fact] public void Tilt_LandscapeFlippedPasses()  => Assert.Equal((-90,   0), TiltAfter(Orientation.LandscapeFlipped));
 }

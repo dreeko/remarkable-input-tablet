@@ -2,7 +2,7 @@
 
 Use a reMarkable 2 as a pressure-sensitive drawing tablet on Windows and Linux — no drivers, no root modifications, no third-party services.
 
-The tablet connects over SSH (USB or Wi-Fi). The pen's raw evdev events are streamed to the PC and injected as native pointer input, giving you full pressure sensitivity, tilt, hover detection, and eraser support in any compatible application.
+The tablet connects over SSH (USB or Wi-Fi). The pen's raw evdev events are streamed to the PC and injected as native pointer input, giving you full pressure sensitivity, tilt, hover detection, and eraser support in any compatible application. Optional multi-touch gestures (pinch / pan / rotate) inject as real touch contacts to apps that consume them.
 
 ## Requirements
 
@@ -27,6 +27,8 @@ The tablet connects over SSH (USB or Wi-Fi). The pen's raw evdev events are stre
 Download `RemtabletApp-*.zip` from Releases, extract, run `RemarkableTablet.App.exe`.
 
 The app lives in the system tray. Right-click → **Connect...** to open Settings, enter your device IP and root password, and click **Connect**.
+
+The Settings dialog also exposes a **Touch Gestures** checkbox to enable pinch / pan / rotate from the rM2 touchscreen — see the [Touch gestures](#touch-gestures) section below.
 
 ### Windows — CLI
 
@@ -68,6 +70,7 @@ Press **Ctrl-C** to stop.
 | `--width <px>` | auto (Windows) / 1920 (Linux) | Screen width in pixels |
 | `--height <px>` | auto (Windows) / 1080 (Linux) | Screen height in pixels |
 | `--debug` | off | Print pipeline stage info on startup |
+| `--gestures <value>` | `off` | `touch` (inject multi-touch contacts for pinch / pan / rotate) or `off`. The rM2 firmware suppresses touch while the pen is in proximity, so two-finger gestures only register when the pen is set aside. |
 
 ## Orientation
 
@@ -79,6 +82,26 @@ Hold the tablet with the **pen slot at the bottom** for portrait (default). Orie
 | `landscape` | Pen slot on right |
 | `portraitflipped` | Pen slot at top |
 | `landscapeflipped` | Pen slot on left |
+
+## Touch gestures
+
+Pass `--gestures touch` to enable pinch / pan / rotate gestures from the rM2's
+capacitive touchscreen. The tool opens a second SSH stream against
+`/dev/input/event2` and injects multi-touch contacts to the host:
+
+- **Windows:** synthetic touch contacts via `CreateSyntheticPointerDevice(PT_TOUCH)`
+  + `InjectSyntheticPointerInput`. Apps that handle Windows touch (Krita,
+  Photoshop, Affinity, browsers) run their own gesture recognition on the
+  injected contacts.
+- **Linux:** a second uinput device (`reMarkable 2 Touch`) using the MT-B slot
+  protocol with `INPUT_PROP_DIRECT`. Apps reading the input subsystem see
+  real multi-touch contacts.
+
+**Important hardware behavior:** the rM2 firmware suppresses touch reporting
+while the pen is in proximity (verified via `evtest`). This means
+*simultaneous draw + pinch is not possible at the hardware level* — the
+workflow is "lift pen → pinch / pan / rotate → resume drawing." This is a
+property of the device, not the tool.
 
 ## App compatibility
 
@@ -103,6 +126,30 @@ The virtual device appears as a standard pen tablet to any app that reads from t
 - **Blender** — works with tablet pressure in sculpt and paint modes
 
 The device uses `INPUT_PROP_DIRECT` so absolute coordinates map 1:1 to screen pixels. Pressure is reported on the 0–1024 scale.
+
+### Touch gestures (`--gestures touch`)
+
+Pinch / pan / rotate compatibility depends on whether the host application
+consumes Windows touch (or Linux multi-touch) gestures. Confirmed working
+where verified; rows marked "untested" are expected to work but haven't
+been hands-on validated.
+
+| App                          | Pinch zoom | Pan       | Rotate    | Notes |
+|------------------------------|------------|-----------|-----------|-------|
+| **Windows**                  |            |           |           |       |
+| Krita                        | ✅         | ✅        | ✅        | Real touch + Windows Ink coexist cleanly. |
+| Photoshop                    | untested   | untested  | untested  | Expected to work — Photoshop has full Windows touch support. |
+| Affinity Photo / Designer    | untested   | untested  | untested  | Expected to work. |
+| Clip Studio Paint            | untested   | untested  | untested  | |
+| Microsoft Edge / Chrome      | untested   | untested  | n/a       | Browser pinch-zoom of pages. |
+| Windows Photos               | untested   | untested  | n/a       | Native Windows app — should work. |
+| **Linux**                    |            |           |           |       |
+| Krita                        | untested   | untested  | untested  | |
+| GIMP                         | untested   | untested  | n/a       | |
+| Inkscape                     | untested   | untested  | n/a       | |
+| Blender                      | untested   | untested  | n/a       | |
+
+If you confirm or find a failure, the table above is the place to record it.
 
 ## Linux uinput setup
 
@@ -130,7 +177,7 @@ Passwords are never stored. You will be prompted each session.
 
 ## Reconnection
 
-The pipeline reconnects automatically if the SSH stream drops (USB unplugged, device sleeps, Wi-Fi hiccup). Before each reconnect attempt a synthetic pen-up is injected so drawing applications don't get a stuck pen. Retry delays follow exponential backoff: 1 s, 2 s, 4 s, 8 s, 16 s, 30 s (capped).
+The pipeline reconnects automatically if the SSH stream drops (USB unplugged, device sleeps, Wi-Fi hiccup). Before each reconnect attempt a synthetic pen-up *and* an "all touch contacts released" event are injected so drawing applications don't get a stuck pen or stuck touch contacts. Retry delays follow exponential backoff: 1 s, 2 s, 4 s, 8 s, 16 s, 30 s (capped).
 
 ## Building from source
 
@@ -190,51 +237,83 @@ dotnet publish src/RemarkableTablet.App -c Release -r win-x64 `
 ```
 reMarkable 2                         Host PC
 ─────────────────────────────        ─────────────────────────────────────────────
-/dev/input/event1 (evdev)
+/dev/input/event1 (pen)
         │
-   cat (SSH stdout)
-        │
-   ─── SSH (TCP) ──────────────────► SshTransport
-                                            │  PipeReader (System.IO.Pipelines)
-                                     EvdevParser
-                                            │  Channel<EvdevEvent>
-                                    TabletStateMachine
-                                            │  Channel<PenFrame>
-                                    CoordinateMapper
-                                            │  MappedFrame
-                                     IOutputMode
-                                      ├─ WindowsInkOutput  ← InjectSyntheticPointerInput (Windows)
-                                      ├─ MouseOutput        ← SetCursorPos / mouse_event  (Windows)
-                                      └─ UinputOutput       ← /dev/uinput kernel module   (Linux)
+   cat (SSH stdout) ──┐
+                      │
+/dev/input/event2 (touch, when --gestures touch)
+        │             │
+   cat (SSH stdout) ──┤
+                      │
+   ─── SSH (TCP) ────►┴► SshTransport ── one SshClient, one SshDeviceStream per evdev device
+                            │
+                            ├──► EvdevParser → Channel<EvdevEvent> ──► TabletStateMachine
+                            │                                              │  Channel<PenFrame>
+                            │                                         CoordinateMapper
+                            │                                              │  MappedFrame
+                            │                                          IOutputMode
+                            │                                           ├─ WindowsInkOutput      (Windows Ink injection)
+                            │                                           ├─ MouseOutput           (cursor only, Windows)
+                            │                                           └─ UinputOutput          (Linux pen tablet)
+                            │
+                            └──► EvdevParser → Channel<EvdevEvent> ──► TouchStateMachine
+                                                                           │  Channel<TouchFrame>
+                                                                       TouchCoordinateMapper
+                                                                           │  MappedTouchFrame
+                                                                       ITouchOutput
+                                                                        ├─ WindowsTouchInjectionOutput  (synthetic touch, Windows)
+                                                                        └─ UinputTouchOutput            (Linux MT-B touchscreen)
 ```
 
 **Projects:**
 
 | Project | Platform | Role |
 |---------|----------|------|
-| `RemarkableTablet.Core` | Any | Platform-agnostic pipeline: evdev parser, state machine, coordinate mapper |
-| `RemarkableTablet.Windows` | Windows | Win32 P/Invoke layer: Windows Ink pointer injection, mouse output |
-| `RemarkableTablet.Linux` | Linux | uinput P/Invoke layer: virtual pen tablet via `/dev/uinput` |
+| `RemarkableTablet.Core` | Any | Platform-agnostic pipeline: evdev parser, state machines (pen + touch), coordinate mappers, gesture engine, multi-stream SSH transport |
+| `RemarkableTablet.Windows` | Windows | Win32 P/Invoke layer: Windows Ink pen injection, mouse output, synthetic touch injection (`PT_TOUCH`) |
+| `RemarkableTablet.Linux` | Linux | uinput P/Invoke layer: virtual pen tablet + virtual MT-B multi-touch device |
 | `RemarkableTablet.Cli` | Windows + Linux | `remtablet` — headless CLI, NativeAOT |
 | `RemarkableTablet.App` | Windows | `RemarkableTablet.App.exe` — system tray GUI, WPF + WinForms |
 | `tools/EventDiagnostics` | Windows | Live evdev event stream logger — streams events to console for debugging |
 
 ## Hardware details
 
-Digitizer confirmed via `evtest` on firmware version 1231:
+### Pen digitizer (`/dev/input/event1`)
+
+Confirmed via `evtest` on firmware version 1231 (Wacom I2C Digitizer).
+Axis convention re-verified 2026-05-07 against the touchscreen — earlier docs
+had ABS_X / ABS_Y rotated 180°.
 
 | Axis | Range | Notes |
 |------|-------|-------|
-| ABS_X | 0 – 20966 | Long axis: 0 = USB/bottom, max = top of device (portrait) |
-| ABS_Y | 0 – 15725 | Short axis: 0 = left, max = right of device (portrait) |
+| ABS_X | 0 – 20966 | Long axis: 0 = top of device, max = USB/bottom (portrait) |
+| ABS_Y | 0 – 15725 | Short axis: 0 = right, max = left (portrait) |
 | Pressure | 0 – 4095 | 12-bit, mapped to 0–1024 via shaping curve (Windows Ink scale) |
 | Distance | 0 – 255 | Hover height above surface |
 | Tilt X/Y | −9000 – 9000 | Firmware units, mapped to ±90° |
 
-> **Note on tilt:** the tilt vector is rotated by the same orientation transform as
-> position, but the sign convention vs. Windows Ink (positive tilt-X = pen leans
-> toward the +X screen axis) has not been empirically verified. If your brushes
-> highlight the wrong direction in non-Portrait orientations, the four cases in
+### Touchscreen (`/dev/input/event2`)
+
+Capacitive multi-touch panel, driver `pt_mt`. Confirmed via `evtest` 2026-05-07.
+
+| Axis | Range | Notes |
+|------|-------|-------|
+| ABS_MT_POSITION_X | 0 – 1403 | Display-aligned, INPUT_PROP_DIRECT |
+| ABS_MT_POSITION_Y | 0 – 1871 | Display-aligned, INPUT_PROP_DIRECT |
+| ABS_MT_PRESSURE | 0 – 255 | Per-contact pressure |
+| ABS_MT_SLOT | 0 – 31 | Hardware-reported; tool caps tracking at 5 |
+| ABS_MT_TRACKING_ID | 0 – 65535 | Monotonically incrementing per-contact ID |
+| Sample rate | ~85 Hz | Measured under continuous motion |
+
+> **Pen-priority hardware behavior:** the rM2 firmware suppresses the
+> touchscreen entirely while the pen is in proximity. This is verified — the
+> `PenToolGate` was originally planned as a host-side workaround but turned
+> out to be unnecessary. Workflow: lift the pen, gesture, then resume drawing.
+
+> **Note on tilt:** tilt rotation matches the position transform that aligns
+> with the touchscreen. The Windows Ink sign convention (positive tilt-X =
+> pen leans toward +X screen axis) is not independently verified — if brush
+> highlights point the wrong direction, the four cases in
 > `CoordinateMapper.RotateTilt` are the place to flip signs.
 
 ## License

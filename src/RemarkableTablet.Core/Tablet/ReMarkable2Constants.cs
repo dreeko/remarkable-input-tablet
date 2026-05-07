@@ -13,9 +13,11 @@ public static class ReMarkable2Constants
     // evdev struct size — 16 bytes on 32-bit ARM (i.MX7D Cortex-A7), confirmed armv7l
     public const int EventStructSize = 16;
 
-    // ABS_X / ABS_Y — portrait orientation (USB at bottom, device held tall)
-    // ABS_X is the LONG axis: 0=USB/bottom, PenXMax=top of device
-    // ABS_Y is the SHORT axis: 0=left, PenYMax=right of device
+    // ABS_X / ABS_Y — portrait orientation (USB at bottom, device held tall).
+    // Pen aligned with the touch panel (verified 2026-05-07 against pt_mt
+    // touchscreen which produces correct cursor positioning):
+    //   ABS_X is the LONG axis,  0 = top of device, PenXMax = USB/bottom.
+    //   ABS_Y is the SHORT axis, 0 = right side,    PenYMax = left side.
     public const int PenXMin = 0;
     public const int PenXMax = 20966;
 
@@ -42,4 +44,24 @@ public static class ReMarkable2Constants
     // Windows Ink tilt range (degrees)
     public const int WindowsTiltMin = -90;
     public const int WindowsTiltMax = 90;
+
+    // ── Touchscreen ─────────────────────────────────────────────────────────
+    // Verified 2026-05-07 via evtest /dev/input/event2 (driver: pt_mt).
+    // Coordinates are display-aligned (1404 × 1872), MT-B slot protocol.
+    // BTN_TOUCH is NOT reported by this device — contact lifecycle uses
+    // ABS_MT_TRACKING_ID transitions only.
+    public const string TouchDevicePath = "/dev/input/event2";
+
+    public const int TouchXMin = 0;
+    public const int TouchXMax = 1403;
+    public const int TouchYMin = 0;
+    public const int TouchYMax = 1871;
+
+    public const int TouchPressureMin = 0;
+    public const int TouchPressureMax = 255;
+
+    // Hardware reports 32 slots; we cap our state machine at 5 (enough for
+    // two-finger gestures with margin for transient noise contacts).
+    public const int TouchMaxSlots = 32;
+    public const int TouchMaxTracked = 5;
 }

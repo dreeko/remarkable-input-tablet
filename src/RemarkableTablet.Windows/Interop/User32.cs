@@ -4,6 +4,7 @@ namespace RemarkableTablet.Windows.Interop;
 
 internal static class User32
 {
+    internal const uint PT_TOUCH = 2;
     internal const uint PT_PEN = 3;
     internal const uint POINTER_FEEDBACK_DEFAULT = 1;
 
@@ -22,6 +23,18 @@ internal static class User32
     internal static extern bool InjectSyntheticPointerInput(
         IntPtr device,
         in POINTER_TYPE_INFO pointerInfo,
+        uint count);
+
+    /// <summary>
+    ///     Touch-flavoured overload — separate P/Invoke because the union
+    ///     payload differs in size and layout from the pen variant.
+    ///     Caller passes a pinned array of POINTER_TYPE_INFO_TOUCH.
+    /// </summary>
+    [DllImport("user32.dll", EntryPoint = "InjectSyntheticPointerInput", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern unsafe bool InjectSyntheticTouchInput(
+        IntPtr device,
+        POINTER_TYPE_INFO_TOUCH* pointerInfo,
         uint count);
 
     [DllImport("user32.dll")]

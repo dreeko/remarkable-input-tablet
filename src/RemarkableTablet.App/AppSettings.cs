@@ -23,6 +23,9 @@ public sealed class AppSettings
     public string OutputMode { get; set; } = "ink";
     public bool AutoConnect { get; set; }
 
+    /// <summary>"off" or "touch". Defaults to off so existing users see no behavior change on upgrade.</summary>
+    public string Gestures { get; set; } = "off";
+
     public static AppSettings Load()
     {
         try

@@ -58,6 +58,7 @@ public partial class SettingsWindow : Window
         };
         InkRadio.IsChecked = s.OutputMode != OutputModes.Mouse;
         MouseRadio.IsChecked = s.OutputMode == OutputModes.Mouse;
+        GesturesBox.IsChecked = s.Gestures == "touch";
         AutoConnectBox.IsChecked = s.AutoConnect;
 
         if (_autoConnect)
@@ -77,6 +78,7 @@ public partial class SettingsWindow : Window
             _ => "Portrait"
         };
         s.OutputMode = MouseRadio.IsChecked == true ? OutputModes.Mouse : OutputModes.Ink;
+        s.Gestures = GesturesBox.IsChecked == true ? "touch" : "off";
         s.AutoConnect = AutoConnectBox.IsChecked == true;
         s.Save();
     }
@@ -116,6 +118,7 @@ public partial class SettingsWindow : Window
             _ => TabletOrientation.Portrait
         };
         var outputMode = MouseRadio.IsChecked == true ? OutputModes.Mouse : OutputModes.Ink;
+        var gestures = GesturesBox.IsChecked == true;
 
         var connOpts = ConnectionOptions.WithPassword(password, address);
         var mappingOpts = new MappingOptions
@@ -128,7 +131,7 @@ public partial class SettingsWindow : Window
         };
 
         SetStatus("Connecting…");
-        AppInstance.StartPipeline(connOpts, mappingOpts, outputMode);
+        AppInstance.StartPipeline(connOpts, mappingOpts, outputMode, gestures);
     }
 
     private void Disconnect_Click(object sender, RoutedEventArgs e)

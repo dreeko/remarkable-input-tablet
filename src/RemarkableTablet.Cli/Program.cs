@@ -15,6 +15,7 @@ var password    = GetArg(args, "--password",    null);
 var keyPath     = GetArg(args, "--key",         null);
 var orientation = GetArg(args, "--orientation", "portrait")!;
 var outputMode  = GetArg(args, "--output",      "ink")!;
+var gestures    = GetArg(args, "--gestures",    "off")!;
 var debug       = args.Contains("--debug");
 
 var widthArg  = ParseInt(GetArg(args, "--width",  null));
@@ -87,6 +88,28 @@ output = outputMode == "mouse" ? new MouseOutput() : new WindowsInkOutput();
 output = new UinputOutput(screenW, screenH);
 #endif
 
+// Touch wiring — currently only `touch` mode and only on Linux. Windows
+// touch injection lands in M4; `synth` fallback in M5.
+TouchCoordinateMapper? touchMapper = null;
+ITouchOutput? touchOutput = null;
+if (gestures == "touch")
+{
+    touchMapper = new TouchCoordinateMapper(mappingOpts);
+#if LINUX_PLATFORM
+    touchOutput = new UinputTouchOutput(screenW, screenH);
+#elif WINDOWS_PLATFORM
+    touchOutput = new WindowsTouchInjectionOutput();
+#endif
+}
+else if (gestures == "synth")
+{
+    Console.Error.WriteLine("Warning: --gestures synth is not yet implemented; ignoring.");
+}
+else if (gestures != "off")
+{
+    Console.Error.WriteLine($"Warning: unknown --gestures value '{gestures}'; expected touch|synth|off.");
+}
+
 var transport = new SshTransport(connOpts);
 transport.StateChanged += state =>
 {
@@ -97,7 +120,7 @@ transport.StateChanged += state =>
     Console.ResetColor();
 };
 
-await using var pipeline = new TabletPipeline(transport, mapper, output);
+await using var pipeline = new TabletPipeline(transport, mapper, output, touchMapper, touchOutput);
 pipeline.Error += ex =>
 {
     Console.ForegroundColor = ConsoleColor.Red;

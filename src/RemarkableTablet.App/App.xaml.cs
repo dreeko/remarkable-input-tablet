@@ -68,7 +68,7 @@ public partial class App : Application
         catch { }
     }
 
-    public void StartPipeline(ConnectionOptions connOpts, MappingOptions mappingOpts, string outputMode)
+    public void StartPipeline(ConnectionOptions connOpts, MappingOptions mappingOpts, string outputMode, bool gestures = false)
     {
         if (_pipeline is not null) return;
 
@@ -76,9 +76,18 @@ public partial class App : Application
         var output = outputMode == OutputModes.Mouse
             ? (IOutputMode)new MouseOutput()
             : new WindowsInkOutput();
+
+        TouchCoordinateMapper? touchMapper = null;
+        ITouchOutput? touchOutput = null;
+        if (gestures)
+        {
+            touchMapper = new TouchCoordinateMapper(mappingOpts);
+            touchOutput = new WindowsTouchInjectionOutput();
+        }
+
         var transport = new SshTransport(connOpts);
 
-        var pipeline = new TabletPipeline(transport, mapper, output);
+        var pipeline = new TabletPipeline(transport, mapper, output, touchMapper, touchOutput);
         pipeline.ConnectionStateChanged += OnPipelineStateChanged;
         pipeline.Error += ex => WriteLog($"Pipeline error: {ex}");
 

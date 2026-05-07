@@ -25,16 +25,19 @@ public sealed class CoordinateMapper
         var ny = frame.Y / (double)ReMarkable2Constants.PenYMax;
 
         // Apply orientation transform.
-        // rM2 axis layout: ABS_X is the LONG axis (0=USB/bottom, max=top in portrait);
-        //                  ABS_Y is the SHORT axis (0=left, max=right in portrait).
-        // Landscape = 90° CCW from portrait so pen slot/USB ends up on the right.
+        // rM2 pen axis layout (empirically aligned with touch panel 2026-05-07):
+        //   ABS_X is the LONG axis,  0 = top of device in portrait.
+        //   ABS_Y is the SHORT axis, 0 = right of device in portrait.
+        // These are 180° rotated from earlier documented conventions; the
+        // formulas below match the touch mapper's behavior so pen and touch
+        // agree on screen direction in every orientation.
         var (rx, ry) = _opts.Orientation switch
         {
-            Orientation.Portrait => (ny, 1.0 - nx),
-            Orientation.Landscape => (1.0 - nx, 1.0 - ny),
-            Orientation.PortraitFlipped => (1.0 - ny, nx),
-            Orientation.LandscapeFlipped => (nx, ny),
-            _ => (ny, 1.0 - nx)
+            Orientation.Portrait         => (1.0 - ny, nx),
+            Orientation.Landscape        => (nx,        ny),
+            Orientation.PortraitFlipped  => (ny,        1.0 - nx),
+            Orientation.LandscapeFlipped => (1.0 - nx,  1.0 - ny),
+            _                            => (1.0 - ny, nx)
         };
 
         // Apply tablet area crop (user-selected active region)
@@ -87,10 +90,10 @@ public sealed class CoordinateMapper
     /// </summary>
     private static (int X, int Y) RotateTilt(int tx, int ty, Orientation o) => o switch
     {
-        Orientation.Portrait         => (ty,  -tx),
-        Orientation.Landscape        => (-tx, -ty),
-        Orientation.PortraitFlipped  => (-ty,  tx),
-        Orientation.LandscapeFlipped => (tx,  ty),
-        _                            => (ty,  -tx)
+        Orientation.Portrait         => (-ty,  tx),
+        Orientation.Landscape        => ( tx,  ty),
+        Orientation.PortraitFlipped  => ( ty, -tx),
+        Orientation.LandscapeFlipped => (-tx, -ty),
+        _                            => (-ty,  tx)
     };
 }
