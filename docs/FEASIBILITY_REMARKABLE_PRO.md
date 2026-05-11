@@ -1,6 +1,8 @@
 # Feasibility — reMarkable Paper Pro (rMPP) support
 
 **Date:** 2026-05-11
+**Status (2026-05-11):** Phases 1–5 of `IMPLEMENTATION_PLAN_RMPP.md` are landed on branch `rmpp-support`. Build is green and unit tests pass (including 64-bit parser regression). Phase 0 hardware verification is the remaining blocker before tagging `v0.4.0` — see the `TODO(rmpp-phase0)` markers in `src/RemarkableTablet.Core/Devices/ReMarkablePaperProProfile.cs`.
+
 **Verdict:** Feasible. The architecture of this tool (SSH → evdev stream → state machine → host-side pointer injection) carries over cleanly. The pen, touchscreen, and root SSH all exist on the rMPP. What changes is mostly numbers — a different CPU bitness, a different display size, different axis ranges — and the community has already mapped most of those numbers in `Evidlo/remarkable_mouse`'s `rmpro` branch (see §2 below), so empirical bring-up is verification, not discovery.
 
 No host-side change is needed (Win32 / uinput injection is device-agnostic). All the work lives in `RemarkableTablet.Core`, gated behind a device-profile abstraction.

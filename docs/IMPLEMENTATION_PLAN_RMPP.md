@@ -1,7 +1,8 @@
 # Implementation Plan — reMarkable Paper Pro Support
 
-**Status:** Draft, ready to execute
-**Companion docs:** `docs/FEASIBILITY_REMARKABLE_PRO.md` (verdict, prior art, constants); project memory `reference_rmpp_prior_art.md` (Evidlo `rmpro` source-of-truth)
+**Status (2026-05-11):** Phases 1–4 + the §5 documentation work are landed on branch `rmpp-support` (4 commits). Phase 0 hardware bring-up is the only remaining blocker before tagging v0.4.0; see `docs/RELEASE_NOTES_v0.4.0.md` for the release-notes draft and the `TODO(rmpp-phase0)` markers in `src/RemarkableTablet.Core/Devices/ReMarkablePaperProProfile.cs` for the verification gaps.
+
+**Companion docs:** `docs/FEASIBILITY_REMARKABLE_PRO.md` (verdict, prior art, constants); project memory `reference_rmpp_prior_art.md` (Evidlo `rmpro` source-of-truth).
 **Target release:** v0.4.0
 **Total effort estimate:** ~3.75 days of code + hardware bring-up time
 
