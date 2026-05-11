@@ -58,6 +58,23 @@ public sealed class SshTransport : IAsyncDisposable
         return stream;
     }
 
+    /// <summary>
+    ///     Runs a one-shot command on the connected client and returns its
+    ///     stdout, trimmed. Used by <see cref="Devices.DeviceDetector" /> for
+    ///     `uname -m`-style probes before the streaming pipeline starts.
+    /// </summary>
+    public Task<string> RunCommandAsync(string command, CancellationToken ct)
+    {
+        if (_client is null)
+            throw new InvalidOperationException("Not connected. Call ConnectAsync first.");
+
+        return Task.Run(() =>
+        {
+            using var cmd = _client.RunCommand(command);
+            return (cmd.Result ?? "").Trim();
+        }, ct);
+    }
+
     private SshClient BuildClient()
     {
         if (_opts.PrivateKeyPath is not null)

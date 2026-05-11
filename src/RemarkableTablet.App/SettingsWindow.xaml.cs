@@ -47,6 +47,12 @@ public partial class SettingsWindow : Window
     {
         var s = AppSettings.Load();
         AddressBox.Text = s.Host;
+        DeviceBox.SelectedIndex = s.Device switch
+        {
+            "rm2"  => 1,
+            "rmpp" => 2,
+            _      => 0  // auto
+        };
         if (MonitorBox.Items.Count > 0)
             MonitorBox.SelectedIndex = Math.Max(0, Math.Min(s.MonitorIndex, MonitorBox.Items.Count - 1));
         OrientationBox.SelectedIndex = s.Orientation switch
@@ -75,6 +81,12 @@ public partial class SettingsWindow : Window
     {
         var s = AppSettings.Load();
         s.Host = AddressBox.Text.Trim();
+        s.Device = DeviceBox.SelectedIndex switch
+        {
+            1 => "rm2",
+            2 => "rmpp",
+            _ => "auto"
+        };
         s.MonitorIndex = MonitorBox.SelectedIndex;
         s.Orientation = OrientationBox.SelectedIndex switch
         {
@@ -137,6 +149,12 @@ public partial class SettingsWindow : Window
             _ => "linear"
         };
         var gestures = GesturesBox.IsChecked == true;
+        var device = DeviceBox.SelectedIndex switch
+        {
+            1 => "rm2",
+            2 => "rmpp",
+            _ => "auto"
+        };
 
         var connOpts = ConnectionOptions.WithPassword(password, address);
         var mappingOpts = new MappingOptions
@@ -149,7 +167,7 @@ public partial class SettingsWindow : Window
         };
 
         SetStatus("Connecting…");
-        AppInstance.StartPipeline(connOpts, mappingOpts, outputMode, gestures, pressureCurve);
+        AppInstance.StartPipeline(connOpts, mappingOpts, outputMode, gestures, pressureCurve, device);
     }
 
     private void Disconnect_Click(object sender, RoutedEventArgs e)

@@ -18,6 +18,7 @@ var orientation = GetArg(args, "--orientation", "portrait")!;
 var outputMode  = GetArg(args, "--output",      "ink")!;
 var gestures    = GetArg(args, "--gestures",    "off")!;
 var pressure    = GetArg(args, "--pressure",    "linear")!;
+var deviceArg   = GetArg(args, "--device",      "auto")!;
 var debug       = args.Contains("--debug");
 
 var widthArg  = ParseInt(GetArg(args, "--width",  null));
@@ -29,9 +30,9 @@ if (password is null && keyPath is null)
     await Console.Error.WriteLineAsync();
     await Console.Error.WriteLineAsync("Usage:");
 #if WINDOWS_PLATFORM
-    await Console.Error.WriteLineAsync("  remtablet --password <pw> [--address <ip>] [--orientation portrait|landscape] [--output ink|mouse] [--pressure linear|soft|hard] [--gestures touch|off] [--width <px>] [--height <px>] [--debug]");
+    await Console.Error.WriteLineAsync("  remtablet --password <pw> [--address <ip>] [--device auto|rm2|rmpp] [--orientation portrait|landscape] [--output ink|mouse] [--pressure linear|soft|hard] [--gestures touch|off] [--width <px>] [--height <px>] [--debug]");
 #else
-    await Console.Error.WriteLineAsync("  remtablet --password <pw> [--address <ip>] [--orientation portrait|landscape] [--pressure linear|soft|hard] [--gestures touch|off] [--width <px>] [--height <px>] [--debug]");
+    await Console.Error.WriteLineAsync("  remtablet --password <pw> [--address <ip>] [--device auto|rm2|rmpp] [--orientation portrait|landscape] [--pressure linear|soft|hard] [--gestures touch|off] [--width <px>] [--height <px>] [--debug]");
 #endif
     await Console.Error.WriteLineAsync("  remtablet --key <path/to/id_rsa> [--address <ip>]");
     return 1;
@@ -80,7 +81,26 @@ var orient = orientation.ToLowerInvariant() switch
     _                  => Orientation.Portrait
 };
 
-var profile     = ReMarkable2Profile.Instance;
+// Resolve the device profile: explicit name → that profile, "auto" → probe
+// over SSH via `uname -m`. Auto-detect runs a short-lived SSH session here;
+// the main pipeline then connects again on its own when RunAsync starts.
+DeviceProfile profile;
+if (deviceArg.Equals("auto", StringComparison.OrdinalIgnoreCase))
+{
+    Console.WriteLine($"Detecting device at {address}...");
+    await using var probeTransport = new SshTransport(connOpts);
+    await probeTransport.ConnectAsync(CancellationToken.None);
+    profile = await DeviceDetector.DetectAsync(probeTransport, CancellationToken.None);
+    Console.WriteLine($"Detected: {profile.Name}");
+}
+else
+{
+    profile = DeviceDetector.ByName(deviceArg)
+        ?? throw new ArgumentException(
+            $"Unknown --device '{deviceArg}'. Use auto, rm2, or rmpp.");
+    Console.WriteLine($"Using profile: {profile.Name}");
+}
+
 var mappingOpts = MappingOptions.ForScreen(screenW, screenH, orient);
 var curve       = PressureCurve.FromName(pressure);
 var mapper      = new CoordinateMapper(mappingOpts, profile, curve);

@@ -70,32 +70,59 @@ public partial class App : Application
     }
 
     public void StartPipeline(ConnectionOptions connOpts, MappingOptions mappingOpts, string outputMode,
-        bool gestures = false, string? pressureCurve = null)
+        bool gestures = false, string? pressureCurve = null, string device = "auto")
     {
         if (_pipeline is not null) return;
+        _ = StartPipelineAsync(connOpts, mappingOpts, outputMode, gestures, pressureCurve, device);
+    }
 
-        var profile = ReMarkable2Profile.Instance;
-        var mapper = new CoordinateMapper(mappingOpts, profile, PressureCurve.FromName(pressureCurve));
-        var output = outputMode == OutputModes.Mouse
-            ? (IOutputMode)new MouseOutput()
-            : new WindowsInkOutput();
-
-        TouchCoordinateMapper? touchMapper = null;
-        ITouchOutput? touchOutput = null;
-        if (gestures)
+    private async Task StartPipelineAsync(ConnectionOptions connOpts, MappingOptions mappingOpts,
+        string outputMode, bool gestures, string? pressureCurve, string device)
+    {
+        try
         {
-            touchMapper = new TouchCoordinateMapper(mappingOpts, profile);
-            touchOutput = new WindowsTouchInjectionOutput(profile.Touch.MaxTracked);
+            var profile = await ResolveProfileAsync(connOpts, device);
+            WriteLog($"Using profile: {profile.Name}");
+
+            var mapper = new CoordinateMapper(mappingOpts, profile, PressureCurve.FromName(pressureCurve));
+            var output = outputMode == OutputModes.Mouse
+                ? (IOutputMode)new MouseOutput()
+                : new WindowsInkOutput();
+
+            TouchCoordinateMapper? touchMapper = null;
+            ITouchOutput? touchOutput = null;
+            if (gestures)
+            {
+                touchMapper = new TouchCoordinateMapper(mappingOpts, profile);
+                touchOutput = new WindowsTouchInjectionOutput(profile.Touch.MaxTracked);
+            }
+
+            var transport = new SshTransport(connOpts);
+            var pipeline = new TabletPipeline(transport, profile, mapper, output, touchMapper, touchOutput);
+            pipeline.ConnectionStateChanged += OnPipelineStateChanged;
+            pipeline.Error += ex => WriteLog($"Pipeline error: {ex}");
+
+            _pipeline = pipeline;
+            await RunPipelineAsync(pipeline);
         }
+        catch (Exception ex)
+        {
+            WriteLog($"StartPipeline failed: {ex}");
+            _pipeline = null;
+            await Dispatcher.BeginInvoke(() => PipelineStateChanged?.Invoke(ConnectionState.Disconnected));
+        }
+    }
 
-        var transport = new SshTransport(connOpts);
+    private static async Task<DeviceProfile> ResolveProfileAsync(ConnectionOptions connOpts, string device)
+    {
+        var named = DeviceDetector.ByName(device);
+        if (named is not null) return named;
 
-        var pipeline = new TabletPipeline(transport, profile, mapper, output, touchMapper, touchOutput);
-        pipeline.ConnectionStateChanged += OnPipelineStateChanged;
-        pipeline.Error += ex => WriteLog($"Pipeline error: {ex}");
-
-        _pipeline = pipeline;
-        _ = RunPipelineAsync(pipeline);
+        // "auto" or unknown — probe over a short-lived SSH session. The
+        // streaming pipeline opens its own session afterwards.
+        await using var probe = new SshTransport(connOpts);
+        await probe.ConnectAsync(CancellationToken.None);
+        return await DeviceDetector.DetectAsync(probe, CancellationToken.None);
     }
 
     public void StopPipeline()
