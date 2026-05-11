@@ -1,3 +1,4 @@
+using RemarkableTablet.Core.Devices;
 using RemarkableTablet.Core.Output;
 using RemarkableTablet.Core.Tablet;
 
@@ -11,18 +12,20 @@ public sealed class CoordinateMapper
 {
     private readonly PressureCurve _curve;
     private readonly MappingOptions _opts;
+    private readonly DeviceProfile _profile;
 
-    public CoordinateMapper(MappingOptions opts, PressureCurve? curve = null)
+    public CoordinateMapper(MappingOptions opts, DeviceProfile profile, PressureCurve? curve = null)
     {
         _opts = opts;
+        _profile = profile;
         _curve = curve ?? PressureCurve.Linear;
     }
 
     public MappedFrame Map(PenFrame frame)
     {
         // Normalise raw tablet coords to [0,1]
-        var nx = frame.X / (double)ReMarkable2Constants.PenXMax;
-        var ny = frame.Y / (double)ReMarkable2Constants.PenYMax;
+        var nx = frame.X / (double)_profile.Pen.XMax;
+        var ny = frame.Y / (double)_profile.Pen.YMax;
 
         // Apply orientation transform.
         // rM2 pen axis layout (empirically aligned with touch panel 2026-05-07):
@@ -50,13 +53,13 @@ public sealed class CoordinateMapper
         var sx = _opts.MonitorX + (int)(rx * _opts.MonitorW);
         var sy = _opts.MonitorY + (int)(ry * _opts.MonitorH);
 
-        // Pressure: tablet 0–4095 → normalised → curve → Windows 0–1024
-        var normPressure = frame.Pressure / (double)ReMarkable2Constants.PressureMax;
-        var wPressure = (uint)(_curve.Apply(normPressure) * ReMarkable2Constants.WindowsPressureMax);
+        // Pressure: tablet raw → normalised → curve → Windows 0–1024
+        var normPressure = frame.Pressure / (double)_profile.Pen.PressureMax;
+        var wPressure = (uint)(_curve.Apply(normPressure) * InjectionScale.PressureMax);
 
-        // Tilt: rM2 units → degrees ±90, then rotated to match the position transform.
-        var tiltX = ScaleTilt(frame.TiltX, ReMarkable2Constants.TiltXMin, ReMarkable2Constants.TiltXMax);
-        var tiltY = ScaleTilt(frame.TiltY, ReMarkable2Constants.TiltYMin, ReMarkable2Constants.TiltYMax);
+        // Tilt: firmware units → degrees ±90, then rotated to match the position transform.
+        var tiltX = ScaleTilt(frame.TiltX, _profile.Pen.TiltXMin, _profile.Pen.TiltXMax);
+        var tiltY = ScaleTilt(frame.TiltY, _profile.Pen.TiltYMin, _profile.Pen.TiltYMax);
         (tiltX, tiltY) = RotateTilt(tiltX, tiltY, _opts.Orientation);
 
         return new MappedFrame(
@@ -76,8 +79,8 @@ public sealed class CoordinateMapper
     {
         if (max == min) return 0;
         var norm = (raw - min) / (double)(max - min); // [0,1]
-        return (int)(norm * (ReMarkable2Constants.WindowsTiltMax - ReMarkable2Constants.WindowsTiltMin)
-                     + ReMarkable2Constants.WindowsTiltMin);
+        return (int)(norm * (InjectionScale.TiltMax - InjectionScale.TiltMin)
+                     + InjectionScale.TiltMin);
     }
 
     /// <summary>

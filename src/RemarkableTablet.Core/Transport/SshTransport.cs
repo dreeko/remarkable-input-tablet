@@ -1,5 +1,4 @@
 using System.IO.Pipelines;
-using RemarkableTablet.Core.Tablet;
 using Renci.SshNet;
 
 namespace RemarkableTablet.Core.Transport;
@@ -57,18 +56,6 @@ public sealed class SshTransport : IAsyncDisposable
         var stream = new SshDeviceStream(_client, devicePath, ct);
         _streams.Add(stream);
         return stream;
-    }
-
-    /// <summary>
-    ///     Backwards-compatible convenience: opens the pen device stream if
-    ///     not already open, and returns its reader. Existing single-stream
-    ///     callers (EventDiagnostics, legacy paths) keep working.
-    /// </summary>
-    public PipeReader GetReader()
-    {
-        if (_streams.Count == 0)
-            OpenStream(ReMarkable2Constants.PenDevicePath, CancellationToken.None);
-        return _streams[0].Reader;
     }
 
     private SshClient BuildClient()

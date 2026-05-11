@@ -2,40 +2,41 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.IO.Pipelines;
 using System.Threading.Channels;
+using RemarkableTablet.Core.Devices;
 
 namespace RemarkableTablet.Core.Evdev;
 
 /// <summary>
 ///     Reads the raw evdev byte stream from a PipeReader and writes decoded
 ///     EvdevEvents to a channel. Runs as a long-lived async loop.
-///     On 32-bit ARM (rM2 / i.MX7D), input_event is 16 bytes:
-///     [0..3]  uint32 sec
-///     [4..7]  uint32 usec
-///     [8..9]  uint16 type
-///     [10..11] uint16 code
-///     [12..15] int32 value
+///     <para>
+///         The byte layout of <c>struct input_event</c> depends on the device's
+///         userspace bitness — 16 bytes on 32-bit ARM (rM2), 24 bytes on 64-bit
+///         ARM (rMPP). The caller supplies an <see cref="EvdevLayout" /> with
+///         the appropriate struct size and field offsets. The HHi tail is
+///         identical on both ABIs; only the leading timeval differs.
+///     </para>
 ///     All fields are little-endian.
 /// </summary>
 public static class EvdevParser
 {
-    public const int EventSize = 16;
-
     public static async Task RunAsync(
         PipeReader reader,
         ChannelWriter<EvdevEvent> output,
+        EvdevLayout layout,
         CancellationToken ct)
     {
         try
         {
             while (!ct.IsCancellationRequested)
             {
-                var result = await reader.ReadAtLeastAsync(EventSize, ct);
+                var result = await reader.ReadAtLeastAsync(layout.StructSize, ct);
                 var buffer = result.Buffer;
 
-                while (buffer.Length >= EventSize)
+                while (buffer.Length >= layout.StructSize)
                 {
-                    var ev = Parse(buffer.Slice(0, EventSize));
-                    buffer = buffer.Slice(EventSize);
+                    var ev = Parse(buffer.Slice(0, layout.StructSize), layout);
+                    buffer = buffer.Slice(layout.StructSize);
                     await output.WriteAsync(ev, ct);
                 }
 
@@ -59,23 +60,22 @@ public static class EvdevParser
         }
     }
 
-    private static EvdevEvent Parse(ReadOnlySequence<byte> slice)
+    private static EvdevEvent Parse(ReadOnlySequence<byte> slice, EvdevLayout layout)
     {
         // Hot path — no copy
         if (slice.IsSingleSegment)
-            return ParseSpan(slice.FirstSpan);
+            return ParseSpan(slice.FirstSpan, layout);
 
-        Span<byte> scratch = stackalloc byte[EventSize];
+        Span<byte> scratch = stackalloc byte[layout.StructSize];
         slice.CopyTo(scratch);
-        return ParseSpan(scratch);
+        return ParseSpan(scratch, layout);
     }
 
-    private static EvdevEvent ParseSpan(ReadOnlySpan<byte> span)
+    private static EvdevEvent ParseSpan(ReadOnlySpan<byte> span, EvdevLayout layout)
     {
-        // Skip sec (0..3) and usec (4..7) — not needed for injection
-        var type = BinaryPrimitives.ReadUInt16LittleEndian(span[8..]);
-        var code = BinaryPrimitives.ReadUInt16LittleEndian(span[10..]);
-        var value = BinaryPrimitives.ReadInt32LittleEndian(span[12..]);
+        var type  = BinaryPrimitives.ReadUInt16LittleEndian(span[layout.TypeOffset..]);
+        var code  = BinaryPrimitives.ReadUInt16LittleEndian(span[layout.CodeOffset..]);
+        var value = BinaryPrimitives.ReadInt32LittleEndian(span[layout.ValueOffset..]);
         return new EvdevEvent(type, code, value);
     }
 }

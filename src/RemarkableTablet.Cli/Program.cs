@@ -1,3 +1,4 @@
+using RemarkableTablet.Core.Devices;
 using RemarkableTablet.Core.Mapping;
 using RemarkableTablet.Core.Output;
 using RemarkableTablet.Core.Pipeline;
@@ -79,9 +80,10 @@ var orient = orientation.ToLowerInvariant() switch
     _                  => Orientation.Portrait
 };
 
+var profile     = ReMarkable2Profile.Instance;
 var mappingOpts = MappingOptions.ForScreen(screenW, screenH, orient);
 var curve       = PressureCurve.FromName(pressure);
-var mapper      = new CoordinateMapper(mappingOpts, curve);
+var mapper      = new CoordinateMapper(mappingOpts, profile, curve);
 
 IOutputMode output;
 #if WINDOWS_PLATFORM
@@ -96,11 +98,11 @@ TouchCoordinateMapper? touchMapper = null;
 ITouchOutput? touchOutput = null;
 if (gestures == "touch")
 {
-    touchMapper = new TouchCoordinateMapper(mappingOpts);
+    touchMapper = new TouchCoordinateMapper(mappingOpts, profile);
 #if LINUX_PLATFORM
-    touchOutput = new UinputTouchOutput(screenW, screenH);
+    touchOutput = new UinputTouchOutput(screenW, screenH, profile.Touch.MaxTracked);
 #elif WINDOWS_PLATFORM
-    touchOutput = new WindowsTouchInjectionOutput();
+    touchOutput = new WindowsTouchInjectionOutput(profile.Touch.MaxTracked);
 #endif
 }
 else if (gestures == "synth")
@@ -122,7 +124,7 @@ transport.StateChanged += state =>
     Console.ResetColor();
 };
 
-await using var pipeline = new TabletPipeline(transport, mapper, output, touchMapper, touchOutput);
+await using var pipeline = new TabletPipeline(transport, profile, mapper, output, touchMapper, touchOutput);
 pipeline.Error += ex =>
 {
     Console.ForegroundColor = ConsoleColor.Red;

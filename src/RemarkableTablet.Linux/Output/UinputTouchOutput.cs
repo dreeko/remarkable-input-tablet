@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using RemarkableTablet.Core.Output;
-using RemarkableTablet.Core.Tablet;
 using RemarkableTablet.Linux.Interop;
 
 namespace RemarkableTablet.Linux.Output;
@@ -9,14 +8,15 @@ namespace RemarkableTablet.Linux.Output;
 /// <summary>
 ///     Linux output: injects multi-touch contacts via the uinput kernel module
 ///     using the MT-B (slot) protocol. Creates a virtual touchscreen that
-///     reports up to <see cref="ReMarkable2Constants.TouchMaxTracked" />
-///     concurrent contacts to apps that read the Linux input subsystem.
+///     reports up to <c>maxTracked</c> concurrent contacts to apps that read
+///     the Linux input subsystem.
 ///     Same uinput permissions apply as <see cref="UinputOutput" />.
 /// </summary>
 public sealed class UinputTouchOutput : ITouchOutput
 {
     private readonly int _screenW;
     private readonly int _screenH;
+    private readonly int _maxTracked;
     private int _fd = -1;
 
     // Slots active in the previous frame, keyed by slot index. Value is the
@@ -25,10 +25,11 @@ public sealed class UinputTouchOutput : ITouchOutput
     private bool _btnTouchDown;
     private int _currentEmittedSlot = -1;
 
-    public UinputTouchOutput(int screenW, int screenH)
+    public UinputTouchOutput(int screenW, int screenH, int maxTracked = 5)
     {
         _screenW = screenW;
         _screenH = screenH;
+        _maxTracked = maxTracked;
     }
 
     public void Initialize()
@@ -58,12 +59,12 @@ public sealed class UinputTouchOutput : ITouchOutput
 
         SetupDevice();
 
-        SetAxis(AbsCode.ABS_MT_SLOT,        min: 0, max: ReMarkable2Constants.TouchMaxTracked - 1, fuzz: 0, flat: 0);
-        SetAxis(AbsCode.ABS_MT_POSITION_X,  min: 0, max: _screenW - 1,                              fuzz: 0, flat: 0);
-        SetAxis(AbsCode.ABS_MT_POSITION_Y,  min: 0, max: _screenH - 1,                              fuzz: 0, flat: 0);
-        SetAxis(AbsCode.ABS_MT_TRACKING_ID, min: 0, max: 65535,                                     fuzz: 0, flat: 0);
-        SetAxis(AbsCode.ABS_MT_PRESSURE,    min: 0, max: ReMarkable2Constants.WindowsPressureMax,   fuzz: 0, flat: 0);
-        SetAxis(AbsCode.ABS_MT_TOUCH_MAJOR, min: 0, max: 255,                                       fuzz: 0, flat: 0);
+        SetAxis(AbsCode.ABS_MT_SLOT,        min: 0, max: _maxTracked - 1,            fuzz: 0, flat: 0);
+        SetAxis(AbsCode.ABS_MT_POSITION_X,  min: 0, max: _screenW - 1,               fuzz: 0, flat: 0);
+        SetAxis(AbsCode.ABS_MT_POSITION_Y,  min: 0, max: _screenH - 1,               fuzz: 0, flat: 0);
+        SetAxis(AbsCode.ABS_MT_TRACKING_ID, min: 0, max: 65535,                      fuzz: 0, flat: 0);
+        SetAxis(AbsCode.ABS_MT_PRESSURE,    min: 0, max: InjectionScale.PressureMax, fuzz: 0, flat: 0);
+        SetAxis(AbsCode.ABS_MT_TOUCH_MAJOR, min: 0, max: 255,                        fuzz: 0, flat: 0);
 
         Ioctl(UinputIoctl.UI_DEV_CREATE);
 
@@ -83,7 +84,7 @@ public sealed class UinputTouchOutput : ITouchOutput
             // Cap the slot index to what the virtual device declared. Upstream
             // is supposed to respect TouchMaxTracked, but defend against an
             // out-of-range slot from a misbehaving frame.
-            if (c.Slot < 0 || c.Slot >= ReMarkable2Constants.TouchMaxTracked) continue;
+            if (c.Slot < 0 || c.Slot >= _maxTracked) continue;
 
             seenSlots.Add(c.Slot);
             SwitchSlot(c.Slot);

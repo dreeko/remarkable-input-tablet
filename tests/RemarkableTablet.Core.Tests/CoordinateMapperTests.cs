@@ -1,3 +1,4 @@
+using RemarkableTablet.Core.Devices;
 using RemarkableTablet.Core.Mapping;
 using RemarkableTablet.Core.Tablet;
 using Xunit;
@@ -6,6 +7,8 @@ namespace RemarkableTablet.Core.Tests;
 
 public class CoordinateMapperTests
 {
+    private static readonly DeviceProfile Rm2 = ReMarkable2Profile.Instance;
+
     private static CoordinateMapper MakeMapper(Orientation orientation, int monW = 1920, int monH = 1080)
     {
         var opts = new MappingOptions
@@ -16,7 +19,7 @@ public class CoordinateMapperTests
             MonitorH = monH,
             Orientation = orientation
         };
-        return new CoordinateMapper(opts, PressureCurve.Linear);
+        return new CoordinateMapper(opts, Rm2, PressureCurve.Linear);
     }
 
     private static PenFrame MakeFrame(
@@ -37,7 +40,7 @@ public class CoordinateMapperTests
         // Physical top-left in portrait = (ABS_X=0, ABS_Y=PenYMax).
         // Formula (1-ny, nx): rx=0, ry=0 → screen (0, 0).
         var mapper = MakeMapper(Orientation.Portrait);
-        var frame = MakeFrame(0, ReMarkable2Constants.PenYMax);
+        var frame = MakeFrame(0, Rm2.Pen.YMax);
         var mapped = mapper.Map(frame);
         Assert.Equal(0, mapped.ScreenX);
         Assert.Equal(0, mapped.ScreenY);
@@ -47,7 +50,7 @@ public class CoordinateMapperTests
     public void PortraitCenter_MapsToScreenCenter()
     {
         var mapper = MakeMapper(Orientation.Portrait);
-        var frame = MakeFrame(ReMarkable2Constants.PenXMax / 2, ReMarkable2Constants.PenYMax / 2);
+        var frame = MakeFrame(Rm2.Pen.XMax / 2, Rm2.Pen.YMax / 2);
         var mapped = mapper.Map(frame);
         // Should be approximately center (±2px tolerance for integer rounding)
         Assert.InRange(mapped.ScreenX, 958, 962);
@@ -58,7 +61,7 @@ public class CoordinateMapperTests
     public void LandscapeOrientation_MapsDirectly()
     {
         var mapper = MakeMapper(Orientation.Landscape);
-        var frame = MakeFrame(ReMarkable2Constants.PenXMax / 2, ReMarkable2Constants.PenYMax / 2);
+        var frame = MakeFrame(Rm2.Pen.XMax / 2, Rm2.Pen.YMax / 2);
         var mapped = mapper.Map(frame);
         Assert.InRange(mapped.ScreenX, 958, 962);
         Assert.InRange(mapped.ScreenY, 538, 542);
@@ -87,7 +90,7 @@ public class CoordinateMapperTests
         // Physical top-left = (ABS_X=PenXMax, ABS_Y=0).
         // Formula (ny, 1-nx): rx=0, ry=0 → screen (0,0).
         var mapper = MakeMapper(Orientation.PortraitFlipped);
-        var frame = MakeFrame(ReMarkable2Constants.PenXMax, 0);
+        var frame = MakeFrame(Rm2.Pen.XMax, 0);
         var mapped = mapper.Map(frame);
         Assert.Equal(0, mapped.ScreenX);
         Assert.Equal(0, mapped.ScreenY);
@@ -100,7 +103,7 @@ public class CoordinateMapperTests
         // Physical top-left = (ABS_X=PenXMax, ABS_Y=PenYMax).
         // Formula (1-nx, 1-ny): rx=0, ry=0 → screen (0,0).
         var mapper = MakeMapper(Orientation.LandscapeFlipped);
-        var frame = MakeFrame(ReMarkable2Constants.PenXMax, ReMarkable2Constants.PenYMax);
+        var frame = MakeFrame(Rm2.Pen.XMax, Rm2.Pen.YMax);
         var mapped = mapper.Map(frame);
         Assert.Equal(0, mapped.ScreenX);
         Assert.Equal(0, mapped.ScreenY);
@@ -115,10 +118,10 @@ public class CoordinateMapperTests
         Assert.Equal(0u, mapper.Map(MakeFrame(0, 0)).Pressure);
 
         // Full pressure → 1024
-        Assert.Equal(1024u, mapper.Map(MakeFrame(0, 0, ReMarkable2Constants.PressureMax)).Pressure);
+        Assert.Equal(1024u, mapper.Map(MakeFrame(0, 0, Rm2.Pen.PressureMax)).Pressure);
 
         // Half pressure → ~512
-        var half = mapper.Map(MakeFrame(0, 0, ReMarkable2Constants.PressureMax / 2));
+        var half = mapper.Map(MakeFrame(0, 0, Rm2.Pen.PressureMax / 2));
         Assert.InRange(half.Pressure, 510u, 514u);
     }
 
@@ -130,13 +133,13 @@ public class CoordinateMapperTests
             MonitorX = 0, MonitorY = 0, MonitorW = 1920, MonitorH = 1080,
             Orientation = Orientation.Portrait
         };
-        var softMapper = new CoordinateMapper(opts, PressureCurve.Soft);
-        var linMapper = new CoordinateMapper(opts, PressureCurve.Linear);
+        var softMapper = new CoordinateMapper(opts, Rm2, PressureCurve.Soft);
+        var linMapper = new CoordinateMapper(opts, Rm2, PressureCurve.Linear);
 
         // At 25% input, soft curve should produce noticeably higher output than linear.
         // Linear at t=0.25 ≈ 0.25 → ~256/1024.
         // Soft   at t=0.25 (y1=0.40, y2=0.90) ≈ 0.311 → ~318/1024.
-        var rawPressure = ReMarkable2Constants.PressureMax / 4;
+        var rawPressure = Rm2.Pen.PressureMax / 4;
         var softMapped = softMapper.Map(MakeFrame(0, 0, rawPressure));
         var linMapped = linMapper.Map(MakeFrame(0, 0, rawPressure));
 
@@ -156,7 +159,7 @@ public class CoordinateMapperTests
     private static (int X, int Y) TiltAfter(Orientation o)
     {
         var mapper = MakeMapper(o);
-        var f = MakeFrame(0, 0, tiltX: ReMarkable2Constants.TiltXMax, tiltY: 0);
+        var f = MakeFrame(0, 0, tiltX: Rm2.Pen.TiltXMax, tiltY: 0);
         var m = mapper.Map(f);
         return (m.TiltX, m.TiltY);
     }

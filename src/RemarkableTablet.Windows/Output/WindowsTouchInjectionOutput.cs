@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using RemarkableTablet.Core.Output;
-using RemarkableTablet.Core.Tablet;
 using RemarkableTablet.Windows.Interop;
 
 namespace RemarkableTablet.Windows.Output;
@@ -22,6 +21,7 @@ namespace RemarkableTablet.Windows.Output;
 /// </summary>
 public sealed class WindowsTouchInjectionOutput : ITouchOutput
 {
+    private readonly int _maxTracked;
     private IntPtr _device = IntPtr.Zero;
     private uint _frameId;
     private bool _isFirstFrame = true;
@@ -38,11 +38,16 @@ public sealed class WindowsTouchInjectionOutput : ITouchOutput
         public uint Pressure;
     }
 
+    public WindowsTouchInjectionOutput(int maxTracked = 5)
+    {
+        _maxTracked = maxTracked;
+    }
+
     public void Initialize()
     {
         _device = User32.CreateSyntheticPointerDevice(
             User32.PT_TOUCH,
-            (uint)ReMarkable2Constants.TouchMaxTracked,
+            (uint)_maxTracked,
             User32.POINTER_FEEDBACK_DEFAULT);
 
         if (_device == IntPtr.Zero)
@@ -75,7 +80,7 @@ public sealed class WindowsTouchInjectionOutput : ITouchOutput
         // Updates / new contacts.
         foreach (var c in current)
         {
-            if (c.Slot < 0 || c.Slot >= ReMarkable2Constants.TouchMaxTracked) continue;
+            if (c.Slot < 0 || c.Slot >= _maxTracked) continue;
 
             var isNew = !_active.ContainsKey(c.Slot);
             var flags = PointerFlags.InRange | PointerFlags.InContact;

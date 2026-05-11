@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Pipelines;
 using System.Threading.Channels;
+using RemarkableTablet.Core.Devices;
 using RemarkableTablet.Core.Evdev;
 using Xunit;
 
@@ -8,19 +9,26 @@ namespace RemarkableTablet.Core.Tests;
 
 public class EvdevParserTests
 {
+    private static readonly EvdevLayout Layout32 = EvdevLayout.Bits32;
+    private static readonly EvdevLayout Layout64 = EvdevLayout.Bits64;
+
     /// <summary>
-    ///     Builds a synthetic 16-byte evdev event.
-    ///     Layout: sec(4) usec(4) type(2) code(2) value(4) — little-endian
+    ///     Builds a synthetic evdev event at either 16- or 24-byte struct size.
+    ///     32-bit layout: sec(4) usec(4) type(2) code(2) value(4) — little-endian
+    ///     64-bit layout: sec(8) usec(8) type(2) code(2) value(4) — little-endian
     /// </summary>
-    private static byte[] MakeEvent(ushort type, ushort code, int value)
+    private static byte[] MakeEvent(EvdevLayout layout, ushort type, ushort code, int value)
     {
-        var buf = new byte[16];
-        // sec/usec = 0
-        BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(8), type);
-        BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(10), code);
-        BinaryPrimitives.WriteInt32LittleEndian(buf.AsSpan(12), value);
+        var buf = new byte[layout.StructSize];
+        // timeval bytes left at 0
+        BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(layout.TypeOffset), type);
+        BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(layout.CodeOffset), code);
+        BinaryPrimitives.WriteInt32LittleEndian(buf.AsSpan(layout.ValueOffset), value);
         return buf;
     }
+
+    private static byte[] MakeEvent(ushort type, ushort code, int value)
+        => MakeEvent(Layout32, type, code, value);
 
     [Fact]
     public async Task ParsesSingleEvent()
@@ -31,7 +39,7 @@ public class EvdevParserTests
         await pipe.Writer.WriteAsync(MakeEvent(EvdevTypes.EV_ABS, EvdevCodes.ABS_X, 12345));
         await pipe.Writer.CompleteAsync();
 
-        await EvdevParser.RunAsync(pipe.Reader, channel.Writer, CancellationToken.None);
+        await EvdevParser.RunAsync(pipe.Reader, channel.Writer, Layout32, CancellationToken.None);
 
         var events = new List<EvdevEvent>();
         await foreach (var ev in channel.Reader.ReadAllAsync())
@@ -62,7 +70,7 @@ public class EvdevParserTests
         await pipe.Writer.WriteAsync(data);
         await pipe.Writer.CompleteAsync();
 
-        await EvdevParser.RunAsync(pipe.Reader, channel.Writer, CancellationToken.None);
+        await EvdevParser.RunAsync(pipe.Reader, channel.Writer, Layout32, CancellationToken.None);
 
         var events = new List<EvdevEvent>();
         await foreach (var ev in channel.Reader.ReadAllAsync())
@@ -91,7 +99,7 @@ public class EvdevParserTests
 
         await pipe.Writer.CompleteAsync();
 
-        await EvdevParser.RunAsync(pipe.Reader, channel.Writer, CancellationToken.None);
+        await EvdevParser.RunAsync(pipe.Reader, channel.Writer, Layout32, CancellationToken.None);
 
         var events = new List<EvdevEvent>();
         await foreach (var ev in channel.Reader.ReadAllAsync())
@@ -99,6 +107,59 @@ public class EvdevParserTests
 
         Assert.Single(events);
         Assert.Equal(999, events[0].Value);
+    }
+
+    [Fact]
+    public async Task ParsesBits64FrameCorrectly()
+    {
+        // Regression guard for rMPP (aarch64): 24-byte input_event with HHi
+        // payload at offsets 16/18/20. Same logical event as the 32-bit test
+        // above, just packed into the 64-bit timeval layout.
+        var pipe = new Pipe();
+        var channel = Channel.CreateUnbounded<EvdevEvent>();
+
+        await pipe.Writer.WriteAsync(MakeEvent(Layout64, EvdevTypes.EV_ABS, EvdevCodes.ABS_PRESSURE, 4096));
+        await pipe.Writer.CompleteAsync();
+
+        await EvdevParser.RunAsync(pipe.Reader, channel.Writer, Layout64, CancellationToken.None);
+
+        var events = new List<EvdevEvent>();
+        await foreach (var ev in channel.Reader.ReadAllAsync())
+            events.Add(ev);
+
+        Assert.Single(events);
+        Assert.Equal(EvdevTypes.EV_ABS, events[0].Type);
+        Assert.Equal(EvdevCodes.ABS_PRESSURE, events[0].Code);
+        Assert.Equal(4096, events[0].Value);
+    }
+
+    [Fact]
+    public async Task ParsesBits64Stream_NoDesyncAcrossFrames()
+    {
+        // Two concatenated 24-byte frames; the parser must advance exactly
+        // 24 bytes per event. If it slips (e.g. reverts to 16-byte slicing)
+        // the second event decodes as garbage — exactly the rMPP smoking-gun
+        // signature reported in Evidlo/remarkable_mouse Issue #92.
+        var pipe = new Pipe();
+        var channel = Channel.CreateUnbounded<EvdevEvent>();
+
+        byte[] data =
+        [
+            .. MakeEvent(Layout64, EvdevTypes.EV_ABS, EvdevCodes.ABS_X, 1111),
+            .. MakeEvent(Layout64, EvdevTypes.EV_SYN, EvdevCodes.SYN_REPORT, 0)
+        ];
+        await pipe.Writer.WriteAsync(data);
+        await pipe.Writer.CompleteAsync();
+
+        await EvdevParser.RunAsync(pipe.Reader, channel.Writer, Layout64, CancellationToken.None);
+
+        var events = new List<EvdevEvent>();
+        await foreach (var ev in channel.Reader.ReadAllAsync())
+            events.Add(ev);
+
+        Assert.Equal(2, events.Count);
+        Assert.Equal(1111, events[0].Value);
+        Assert.Equal(EvdevCodes.SYN_REPORT, events[1].Code);
     }
 
     [Fact]
@@ -113,9 +174,9 @@ public class EvdevParserTests
         }
 
         var bytes = await File.ReadAllBytesAsync(fixturePath);
-        Assert.True(bytes.Length % EvdevParser.EventSize == 0,
-            $"Fixture size {bytes.Length} is not a multiple of {EvdevParser.EventSize}. " +
-            "If it's a multiple of 24, the device runs 64-bit userspace — update EventStructSize.");
+        Assert.True(bytes.Length % Layout32.StructSize == 0,
+            $"Fixture size {bytes.Length} is not a multiple of {Layout32.StructSize}. " +
+            "If it's a multiple of 24, the device runs 64-bit userspace — use EvdevLayout.Bits64.");
 
         // Write concurrently with the parser — synchronous pre-write deadlocks for
         // large fixtures because Pipe's default pauseWriterThreshold is 65536 bytes.
@@ -128,7 +189,7 @@ public class EvdevParserTests
             await pipe.Writer.CompleteAsync();
         });
 
-        await EvdevParser.RunAsync(pipe.Reader, channel.Writer, CancellationToken.None);
+        await EvdevParser.RunAsync(pipe.Reader, channel.Writer, Layout32, CancellationToken.None);
         await writeTask;
 
         var count = 0;

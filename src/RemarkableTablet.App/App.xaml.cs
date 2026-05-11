@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using RemarkableTablet.Core.Devices;
 using RemarkableTablet.Core.Mapping;
 using RemarkableTablet.Core.Output;
 using RemarkableTablet.Core.Pipeline;
@@ -73,7 +74,8 @@ public partial class App : Application
     {
         if (_pipeline is not null) return;
 
-        var mapper = new CoordinateMapper(mappingOpts, PressureCurve.FromName(pressureCurve));
+        var profile = ReMarkable2Profile.Instance;
+        var mapper = new CoordinateMapper(mappingOpts, profile, PressureCurve.FromName(pressureCurve));
         var output = outputMode == OutputModes.Mouse
             ? (IOutputMode)new MouseOutput()
             : new WindowsInkOutput();
@@ -82,13 +84,13 @@ public partial class App : Application
         ITouchOutput? touchOutput = null;
         if (gestures)
         {
-            touchMapper = new TouchCoordinateMapper(mappingOpts);
-            touchOutput = new WindowsTouchInjectionOutput();
+            touchMapper = new TouchCoordinateMapper(mappingOpts, profile);
+            touchOutput = new WindowsTouchInjectionOutput(profile.Touch.MaxTracked);
         }
 
         var transport = new SshTransport(connOpts);
 
-        var pipeline = new TabletPipeline(transport, mapper, output, touchMapper, touchOutput);
+        var pipeline = new TabletPipeline(transport, profile, mapper, output, touchMapper, touchOutput);
         pipeline.ConnectionStateChanged += OnPipelineStateChanged;
         pipeline.Error += ex => WriteLog($"Pipeline error: {ex}");
 
