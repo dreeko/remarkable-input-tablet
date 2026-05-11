@@ -23,3 +23,5 @@ pen_capture.bin
 # OS
 Thumbs.db
 .DS_Store
+
+docs/
