@@ -4,7 +4,7 @@ namespace RemarkableTablet.Linux.Interop;
 
 internal static class Libc
 {
-    internal const int O_WRONLY   = 1;
+    internal const int O_WRONLY = 1;
     internal const int O_NONBLOCK = 0x800;
 
     [DllImport("libc", SetLastError = true)]

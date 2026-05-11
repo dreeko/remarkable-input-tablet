@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using RemarkableTablet.Core.Devices;
 using RemarkableTablet.Core.Mapping;
 using RemarkableTablet.Core.Output;
 using RemarkableTablet.Core.Pipeline;
@@ -33,6 +34,14 @@ public partial class App : Application
     public bool IsConnected => _pipeline is not null;
 
     public event Action<ConnectionState>? PipelineStateChanged;
+
+    /// <summary>
+    ///     Raised on the UI thread when StartPipeline fails before reaching
+    ///     the streaming loop — typically a probe timeout or auth failure.
+    ///     Gives SettingsWindow something to display instead of a silent
+    ///     transition to Disconnected.
+    /// </summary>
+    public event Action<string>? ConnectionErrorOccurred;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -69,31 +78,89 @@ public partial class App : Application
     }
 
     public void StartPipeline(ConnectionOptions connOpts, MappingOptions mappingOpts, string outputMode,
-        bool gestures = false, string? pressureCurve = null)
+        bool gestures = false, string? pressureCurve = null, string device = "auto")
     {
         if (_pipeline is not null) return;
+        _ = StartPipelineAsync(connOpts, mappingOpts, outputMode, gestures, pressureCurve, device);
+    }
 
-        var mapper = new CoordinateMapper(mappingOpts, PressureCurve.FromName(pressureCurve));
-        var output = outputMode == OutputModes.Mouse
-            ? (IOutputMode)new MouseOutput()
-            : new WindowsInkOutput();
-
-        TouchCoordinateMapper? touchMapper = null;
-        ITouchOutput? touchOutput = null;
-        if (gestures)
+    private async Task StartPipelineAsync(ConnectionOptions connOpts, MappingOptions mappingOpts,
+        string outputMode, bool gestures, string? pressureCurve, string device)
+    {
+        SshTransport? transport = null;
+        var transferred = false;
+        try
         {
-            touchMapper = new TouchCoordinateMapper(mappingOpts);
-            touchOutput = new WindowsTouchInjectionOutput();
+            // Resolve the profile. For "auto", we connect once for the probe
+            // and then hand the same SshTransport to the pipeline — its first
+            // ConnectAsync is a no-op (idempotent on already-connected
+            // clients), which avoids paying for two SSH handshakes back-to-
+            // back and halves the chance of a transient USB-Ethernet flake
+            // stalling startup. For explicit rm2/rmpp the pipeline does its
+            // own connect on the empty transport, same as before.
+            transport = new SshTransport(connOpts);
+
+            DeviceProfile profile;
+            var named = DeviceDetector.ByName(device);
+            if (named is not null)
+            {
+                profile = named;
+            }
+            else
+            {
+                await transport.ConnectAsync(CancellationToken.None);
+                profile = await DeviceDetector.DetectAsync(transport, CancellationToken.None);
+                WriteLog($"Detected: {profile.Name}");
+            }
+
+            var mapper = new CoordinateMapper(mappingOpts, profile, PressureCurve.FromName(pressureCurve));
+            var output = outputMode == OutputModes.Mouse
+                ? (IOutputMode)new MouseOutput()
+                : new WindowsInkOutput();
+
+            TouchCoordinateMapper? touchMapper = null;
+            ITouchOutput? touchOutput = null;
+            if (gestures)
+            {
+                touchMapper = new TouchCoordinateMapper(mappingOpts, profile);
+                touchOutput = new WindowsTouchInjectionOutput(profile.Touch.MaxTracked);
+            }
+
+            var pipeline = new TabletPipeline(transport, profile, mapper, output, touchMapper, touchOutput);
+            pipeline.ConnectionStateChanged += OnPipelineStateChanged;
+            pipeline.Error += ex =>
+            {
+                WriteLog($"Pipeline error: {ex}");
+                // Forward to the UI so reconnect-loop failures (e.g. wrong IP,
+                // device asleep) show a useful message instead of a silent
+                // "Disconnected." Run on the dispatcher because the pipeline
+                // raises Error from a thread-pool thread.
+                var msg = ex.Message;
+                _ = Dispatcher.BeginInvoke(() => ConnectionErrorOccurred?.Invoke(msg));
+            };
+
+            _pipeline = pipeline;
+            transferred = true; // pipeline owns the transport from here
+            await RunPipelineAsync(pipeline);
         }
-
-        var transport = new SshTransport(connOpts);
-
-        var pipeline = new TabletPipeline(transport, mapper, output, touchMapper, touchOutput);
-        pipeline.ConnectionStateChanged += OnPipelineStateChanged;
-        pipeline.Error += ex => WriteLog($"Pipeline error: {ex}");
-
-        _pipeline = pipeline;
-        _ = RunPipelineAsync(pipeline);
+        catch (Exception ex)
+        {
+            WriteLog($"StartPipeline failed: {ex}");
+            if (!transferred && transport is not null)
+            {
+                try { await transport.DisposeAsync(); } catch { /* best-effort */ }
+            }
+            _pipeline = null;
+            var msg = ex.Message;
+            await Dispatcher.BeginInvoke(() =>
+            {
+                // Order matters: fire Disconnected first so the SettingsWindow
+                // updates its status text, then fire the error so the more
+                // useful message overwrites the generic "Disconnected." line.
+                PipelineStateChanged?.Invoke(ConnectionState.Disconnected);
+                ConnectionErrorOccurred?.Invoke(msg);
+            });
+        }
     }
 
     public void StopPipeline()

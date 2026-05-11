@@ -5,6 +5,8 @@ using RemarkableTablet.Core.Transport;
 using Renci.SshNet;
 using Application = System.Windows.Application;
 using Brushes = System.Windows.Media.Brushes;
+using Button = System.Windows.Controls.Button;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using TabletOrientation = RemarkableTablet.Core.Mapping.Orientation;
 
 namespace RemarkableTablet.App;
@@ -21,7 +23,12 @@ public partial class SettingsWindow : Window
         LoadSettings();
 
         AppInstance.PipelineStateChanged += OnPipelineStateChanged;
-        Closed += (_, _) => AppInstance.PipelineStateChanged -= OnPipelineStateChanged;
+        AppInstance.ConnectionErrorOccurred += OnConnectionError;
+        Closed += (_, _) =>
+        {
+            AppInstance.PipelineStateChanged -= OnPipelineStateChanged;
+            AppInstance.ConnectionErrorOccurred -= OnConnectionError;
+        };
 
         // AutoConnect: when set, pressing Enter in the password box triggers Connect.
         if (_autoConnect)
@@ -47,6 +54,12 @@ public partial class SettingsWindow : Window
     {
         var s = AppSettings.Load();
         AddressBox.Text = s.Host;
+        DeviceBox.SelectedIndex = s.Device switch
+        {
+            "rm2" => 1,
+            "rmpp" => 2,
+            _ => 0 // auto
+        };
         if (MonitorBox.Items.Count > 0)
             MonitorBox.SelectedIndex = Math.Max(0, Math.Min(s.MonitorIndex, MonitorBox.Items.Count - 1));
         OrientationBox.SelectedIndex = s.Orientation switch
@@ -62,7 +75,7 @@ public partial class SettingsWindow : Window
         {
             "soft" => 1,
             "hard" => 2,
-            _      => 0
+            _ => 0
         };
         GesturesBox.IsChecked = s.Gestures == "touch";
         AutoConnectBox.IsChecked = s.AutoConnect;
@@ -75,6 +88,12 @@ public partial class SettingsWindow : Window
     {
         var s = AppSettings.Load();
         s.Host = AddressBox.Text.Trim();
+        s.Device = DeviceBox.SelectedIndex switch
+        {
+            1 => "rm2",
+            2 => "rmpp",
+            _ => "auto"
+        };
         s.MonitorIndex = MonitorBox.SelectedIndex;
         s.Orientation = OrientationBox.SelectedIndex switch
         {
@@ -95,7 +114,7 @@ public partial class SettingsWindow : Window
         s.Save();
     }
 
-    private void OnPasswordKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    private void OnPasswordKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter) return;
         if (string.IsNullOrWhiteSpace(PasswordBox.Password)) return;
@@ -137,6 +156,12 @@ public partial class SettingsWindow : Window
             _ => "linear"
         };
         var gestures = GesturesBox.IsChecked == true;
+        var device = DeviceBox.SelectedIndex switch
+        {
+            1 => "rm2",
+            2 => "rmpp",
+            _ => "auto"
+        };
 
         var connOpts = ConnectionOptions.WithPassword(password, address);
         var mappingOpts = new MappingOptions
@@ -149,7 +174,7 @@ public partial class SettingsWindow : Window
         };
 
         SetStatus("Connecting…");
-        AppInstance.StartPipeline(connOpts, mappingOpts, outputMode, gestures, pressureCurve);
+        AppInstance.StartPipeline(connOpts, mappingOpts, outputMode, gestures, pressureCurve, device);
     }
 
     private void Disconnect_Click(object sender, RoutedEventArgs e)
@@ -160,7 +185,7 @@ public partial class SettingsWindow : Window
 
     private async void TestConnection_Click(object sender, RoutedEventArgs e)
     {
-        var btn = sender as System.Windows.Controls.Button;
+        var btn = sender as Button;
         var password = PasswordBox.Password;
         var address = AddressBox.Text.Trim();
 
@@ -208,6 +233,11 @@ public partial class SettingsWindow : Window
                 _ => state.ToString()
             });
         });
+    }
+
+    private void OnConnectionError(string message)
+    {
+        Dispatcher.BeginInvoke(() => SetStatus($"Connection failed: {message}", true));
     }
 
     private void SetStatus(string msg, bool isError = false)

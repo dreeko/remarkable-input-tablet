@@ -1,24 +1,31 @@
 # remarkable-input-tablet
 
-Use a reMarkable 2 as a pressure-sensitive drawing tablet on Windows and Linux — no drivers, no root modifications, no third-party services.
+Use a reMarkable 2 (stable) or reMarkable Paper Pro (experimental — see [Paper Pro status](#paper-pro-status)) as a pressure-sensitive drawing tablet on Windows and Linux. No drivers, no root modifications, no third-party services.
 
 The tablet connects over SSH (USB or Wi-Fi). The pen's raw evdev events are streamed to the PC and injected as native pointer input, giving you full pressure sensitivity, tilt, hover detection, and eraser support in any compatible application. Optional multi-touch gestures (pinch / pan / rotate) inject as real touch contacts to apps that consume them.
 
 ## Requirements
 
-### Windows
+### Tablet — reMarkable 2
 
-- **Tablet**: reMarkable 2 (firmware tested: Wacom I2C Digitizer, version 1231)
-- **PC**: Windows 10 1809 or later (Windows Ink pointer injection API)
-- **Connection**: USB cable (SSH at `10.11.99.1`) or Wi-Fi (same SSH, different IP)
-- **Root password**: Settings → Help → Copyrights and licenses → scroll to bottom
+- Firmware tested: Wacom I2C Digitizer, version 1231
+- Root password: Settings → Help → Copyrights and licenses → scroll to bottom
 
-### Linux
+### Tablet — reMarkable Paper Pro
 
-- **Tablet**: reMarkable 2 (same as above)
-- **PC**: Any x86-64 Linux with kernel 4.5+ (uinput module)
-- **Connection**: USB cable or Wi-Fi (same as Windows)
-- **Permissions**: membership in the `input` group (one-time setup, see below)
+- **Developer Mode must be enabled first**: Settings → General → Paper Tablet → Software → Advanced → Developer Mode. The root password then appears at Settings → Help → About → Copyrights and Licenses. See reMarkable's [Developer mode article](https://support.remarkable.com/s/article/Developer-mode).
+- Experimental — most device constants are seeded from community data (`Evidlo/remarkable_mouse` `rmpro` branch) and have not been independently verified against hardware. See [Paper Pro status](#paper-pro-status) for the current verification gaps.
+
+### Host — Windows
+
+- Windows 10 1809 or later (Windows Ink pointer injection API)
+- Connection: USB cable (SSH at `10.11.99.1`) or Wi-Fi (same SSH, different IP)
+
+### Host — Linux
+
+- Any x86-64 Linux with kernel 4.5+ (uinput module)
+- Connection: USB cable or Wi-Fi (same as Windows)
+- Permissions: membership in the `input` group (one-time setup, see below)
 
 ## Quick start
 
@@ -72,6 +79,7 @@ Press **Ctrl-C** to stop.
 | `--debug` | off | Print pipeline stage info on startup |
 | `--gestures <value>` | `off` | `touch` (inject multi-touch contacts for pinch / pan / rotate) or `off`. The rM2 firmware suppresses touch while the pen is in proximity, so two-finger gestures only register when the pen is set aside. |
 | `--pressure <value>` | `linear` | Pressure response curve. `linear` (1:1), `soft` (boosts light strokes — pen feels lighter), or `hard` (suppresses light strokes — pen feels stiffer). |
+| `--device <value>` | `auto` | `auto` (probe via `uname -m`), `rm2`, or `rmpp`. Auto-detect runs a short SSH command before the streaming pipeline starts; force a specific profile only if detection fails. |
 
 ## Orientation
 
@@ -277,6 +285,27 @@ reMarkable 2                         Host PC
 | `RemarkableTablet.App` | Windows | `RemarkableTablet.App.exe` — system tray GUI, WPF + WinForms |
 | `tools/EventDiagnostics` | Windows | Live evdev event stream logger — streams events to console for debugging |
 
+## Paper Pro status
+
+The reMarkable Paper Pro is on a 64-bit aarch64 platform (NXP i.MX 8MM) versus the rM2's 32-bit armv7l, which changes the kernel `struct input_event` size from 16 to 24 bytes. The shared event parser is parameterised by `EvdevLayout` (see `src/RemarkableTablet.Core/Devices/`) and a regression test feeds a 24-byte stream to guard against the desync signature documented in [`Evidlo/remarkable_mouse` Issue #92](https://github.com/Evidlo/remarkable_mouse/issues/92).
+
+Auto-detection via `uname -m` routes the right profile automatically. You can also pass `--device rmpp` explicitly.
+
+**What is verified:**
+
+- Build + unit tests (Windows + Linux, Core + Windows test suites).
+- 64-bit event-struct decoding (synthetic frames).
+- Device-name to profile mapping.
+
+**What is not yet verified on real hardware (search the source for `TODO(rmpp-phase0)`):**
+
+- Pen tilt and hover-distance axis ranges (placeholders match rM2 conventions).
+- Touchscreen axis ranges (placeholders match the 1620 × 2160 display).
+- Whether the pen suppresses touch in proximity (assumed true; rM2 behavior).
+- That `uname -m` returns `aarch64` on the production firmware build (community sources strongly imply yes).
+
+If you have a Paper Pro and want to help, run `tools/EventDiagnostics` against `/dev/input/event2` and `/dev/input/event3` and open an issue with the captured axis ranges. Until those replace the placeholders, treat Paper Pro support as *experimental*.
+
 ## Hardware details
 
 ### Pen digitizer (`/dev/input/event1`)
@@ -316,6 +345,34 @@ Capacitive multi-touch panel, driver `pt_mt`. Confirmed via `evtest` 2026-05-07.
 > pen leans toward +X screen axis) is not independently verified — if brush
 > highlights point the wrong direction, the four cases in
 > `CoordinateMapper.RotateTilt` are the place to flip signs.
+
+## Hardware details — Paper Pro
+
+> **Experimental.** Values below are from the [`Evidlo/remarkable_mouse`](https://github.com/Evidlo/remarkable_mouse) `rmpro` branch (Issue #92), not independently verified. See [Paper Pro status](#paper-pro-status) for what still needs hardware confirmation. The placement of pen / touch device nodes matches the community reports: `event0` = power button, `event1` = pen attach/detach, `event2` = pen, `event3` = touch.
+
+### Pen digitizer (`/dev/input/event2`)
+
+| Axis | Range | Notes |
+|------|-------|-------|
+| ABS_X | 0 – 11180 | Resolution 2832 ticks/mm |
+| ABS_Y | 0 – 15340 | Resolution 2064 ticks/mm |
+| Pressure | 0 – 4096 | 12-bit, mapped to 0–1024 via shaping curve |
+| Tilt X/Y | ±9000 | Placeholder; not in the community data |
+| Distance | 0 – 255 | Placeholder; not in the community data |
+
+The active "Marker Plus" stylus is battery-powered and inductively charged, not Wacom EMR. Old rM2/LAMY EMR pens do not work on the Paper Pro.
+
+### Touchscreen (`/dev/input/event3`)
+
+| Axis | Range | Notes |
+|------|-------|-------|
+| ABS_MT_POSITION_X | 0 – 1619 | Placeholder; assumes display-aligned 1620 × 2160 |
+| ABS_MT_POSITION_Y | 0 – 2159 | Placeholder; assumes display-aligned |
+| ABS_MT_PRESSURE | 0 – 255 | Per-contact pressure (assumed; not verified) |
+
+### Event struct
+
+`struct input_event` on aarch64 Linux is 24 bytes: 8-byte `tv_sec`, 8-byte `tv_usec`, then `__u16 type`, `__u16 code`, `__s32 value`. Field offsets are 16 / 18 / 20 versus rM2's 8 / 10 / 12. The shared `EvdevParser` reads these from a per-profile `EvdevLayout`.
 
 ## License
 

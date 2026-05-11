@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using RemarkableTablet.Core.Devices;
 using RemarkableTablet.Core.Evdev;
 using RemarkableTablet.Core.Transport;
 
@@ -57,7 +58,9 @@ var channel = Channel.CreateBounded<EvdevEvent>(new BoundedChannelOptions(512)
     FullMode = BoundedChannelFullMode.DropOldest
 });
 
-var parseTask = EvdevParser.RunAsync(transport.GetReader(), channel.Writer, cts.Token);
+var profile = ReMarkable2Profile.Instance;
+var penStream = transport.OpenStream(profile.PenDevicePath, cts.Token);
+var parseTask = EvdevParser.RunAsync(penStream.Reader, channel.Writer, profile.EventLayout, cts.Token);
 
 // Tracks whether a dot was the last thing written (needs a newline before the next real line)
 var needsNewline = false;

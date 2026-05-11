@@ -29,6 +29,9 @@ public sealed class AppSettings
     /// <summary>"linear" (default), "soft" (boost light strokes), or "hard" (suppress light strokes).</summary>
     public string PressureCurve { get; set; } = "linear";
 
+    /// <summary>"auto" (probe via uname -m), "rm2", or "rmpp".</summary>
+    public string Device { get; set; } = "auto";
+
     public static AppSettings Load()
     {
         try

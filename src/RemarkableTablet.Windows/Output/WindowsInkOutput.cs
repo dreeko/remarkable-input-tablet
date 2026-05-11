@@ -18,8 +18,8 @@ public sealed class WindowsInkOutput : IOutputMode
 {
     private IntPtr _device = IntPtr.Zero;
     private uint _frameId;
-    private bool _wasInContact;
     private bool _isFirstFrame = true;
+    private bool _wasInContact;
 
     public void Initialize()
     {
@@ -134,9 +134,7 @@ public sealed class WindowsInkOutput : IOutputMode
             flags = baseFlags | PointerFlags.Up | PointerFlags.InRange;
         }
         else
-        {
             flags |= PointerFlags.Update; // hovering
-        }
 
         return flags;
     }

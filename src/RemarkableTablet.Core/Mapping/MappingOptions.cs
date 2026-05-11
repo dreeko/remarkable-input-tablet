@@ -29,6 +29,8 @@ public sealed class MappingOptions
     public Orientation Orientation { get; init; } = Orientation.Portrait;
 
     /// <summary>Map the full area of a screen with explicit dimensions.</summary>
-    public static MappingOptions ForScreen(int w, int h, Orientation orientation = Orientation.Portrait) =>
-        new() { MonitorX = 0, MonitorY = 0, MonitorW = w, MonitorH = h, Orientation = orientation };
+    public static MappingOptions ForScreen(int w, int h, Orientation orientation = Orientation.Portrait)
+    {
+        return new MappingOptions { MonitorX = 0, MonitorY = 0, MonitorW = w, MonitorH = h, Orientation = orientation };
+    }
 }

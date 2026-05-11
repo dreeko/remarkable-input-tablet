@@ -24,9 +24,20 @@ public class TouchStateMachineTests
         return frames;
     }
 
-    private static EvdevEvent Abs(ushort code, int value) => new(EvdevTypes.EV_ABS, code, value);
-    private static EvdevEvent Syn() => new(EvdevTypes.EV_SYN, EvdevCodes.SYN_REPORT, 0);
-    private static EvdevEvent SynDropped() => new(EvdevTypes.EV_SYN, EvdevCodes.SYN_DROPPED, 0);
+    private static EvdevEvent Abs(ushort code, int value)
+    {
+        return new EvdevEvent(EvdevTypes.EV_ABS, code, value);
+    }
+
+    private static EvdevEvent Syn()
+    {
+        return new EvdevEvent(EvdevTypes.EV_SYN, EvdevCodes.SYN_REPORT, 0);
+    }
+
+    private static EvdevEvent SynDropped()
+    {
+        return new EvdevEvent(EvdevTypes.EV_SYN, EvdevCodes.SYN_DROPPED, 0);
+    }
 
     [Fact]
     public async Task SingleTap_StartsAndReleasesContactInSlotZero()

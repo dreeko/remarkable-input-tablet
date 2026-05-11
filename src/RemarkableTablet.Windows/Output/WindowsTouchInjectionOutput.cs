@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using RemarkableTablet.Core.Output;
-using RemarkableTablet.Core.Tablet;
 using RemarkableTablet.Windows.Interop;
 
 namespace RemarkableTablet.Windows.Output;
@@ -13,42 +12,42 @@ namespace RemarkableTablet.Windows.Output;
 ///     Microsoft apps) see real touch points and run their own pinch / pan /
 ///     rotate gesture recognition.
 ///     Contact lifecycle:
-///       New contact:   Down + InRange + InContact (+ New on first frame ever)
-///       Continuing:    Update + InRange + InContact
-///       Released:      Up
+///     New contact:   Down + InRange + InContact (+ New on first frame ever)
+///     Continuing:    Update + InRange + InContact
+///     Released:      Up
 ///     Windows requires that EVERY currently-tracked contact appears in EVERY
 ///     InjectSyntheticPointerInput call until released — partial frames cause
 ///     the OS to drop pointers silently.
 /// </summary>
 public sealed class WindowsTouchInjectionOutput : ITouchOutput
 {
-    private IntPtr _device = IntPtr.Zero;
-    private uint _frameId;
-    private bool _isFirstFrame = true;
-
     // Active contacts keyed by slot. Stores tracking ID + last position so
     // we can build Up records for slots that have left without remembering
     // the upstream frame.
     private readonly Dictionary<int, ActiveContact> _active = new();
+    private readonly int _maxTracked;
+    private IntPtr _device = IntPtr.Zero;
+    private uint _frameId;
+    private bool _isFirstFrame = true;
 
-    private struct ActiveContact
+    public WindowsTouchInjectionOutput(int maxTracked = 5)
     {
-        public int TrackingId;
-        public int X, Y;
-        public uint Pressure;
+        _maxTracked = maxTracked;
     }
 
     public void Initialize()
     {
         _device = User32.CreateSyntheticPointerDevice(
             User32.PT_TOUCH,
-            (uint)ReMarkable2Constants.TouchMaxTracked,
+            (uint)_maxTracked,
             User32.POINTER_FEEDBACK_DEFAULT);
 
         if (_device == IntPtr.Zero)
+        {
             throw new InvalidOperationException(
                 $"CreateSyntheticPointerDevice(PT_TOUCH) failed: error {Marshal.GetLastWin32Error()}. " +
                 "Requires Windows 10 version 1809 or later.");
+        }
     }
 
     public void Send(MappedTouchFrame frame)
@@ -70,12 +69,13 @@ public sealed class WindowsTouchInjectionOutput : ITouchOutput
         // slot index in the current frame. Only one contact may have Primary.
         var primarySlot = -1;
         foreach (var c in current)
-            if (primarySlot < 0 || c.Slot < primarySlot) primarySlot = c.Slot;
+            if (primarySlot < 0 || c.Slot < primarySlot)
+                primarySlot = c.Slot;
 
         // Updates / new contacts.
         foreach (var c in current)
         {
-            if (c.Slot < 0 || c.Slot >= ReMarkable2Constants.TouchMaxTracked) continue;
+            if (c.Slot < 0 || c.Slot >= _maxTracked) continue;
 
             var isNew = !_active.ContainsKey(c.Slot);
             var flags = PointerFlags.InRange | PointerFlags.InContact;
@@ -96,9 +96,15 @@ public sealed class WindowsTouchInjectionOutput : ITouchOutput
         {
             var stillPresent = false;
             foreach (var c in current)
-                if (c.Slot == slot) { stillPresent = true; break; }
+                if (c.Slot == slot)
+                {
+                    stillPresent = true;
+                    break;
+                }
+
             if (!stillPresent) releasing.Add(slot);
         }
+
         foreach (var slot in releasing)
         {
             var prev = _active[slot];
@@ -122,6 +128,7 @@ public sealed class WindowsTouchInjectionOutput : ITouchOutput
             var prev = kv.Value;
             infos[idx++] = BuildInfo((uint)kv.Key, prev.X, prev.Y, prev.Pressure, PointerFlags.Up);
         }
+
         _active.Clear();
         InjectBatch(infos, (uint)idx);
     }
@@ -142,14 +149,21 @@ public sealed class WindowsTouchInjectionOutput : ITouchOutput
         {
             var stillPresent = false;
             foreach (var c in current)
-                if (c.Slot == slot) { stillPresent = true; break; }
+                if (c.Slot == slot)
+                {
+                    stillPresent = true;
+                    break;
+                }
+
             if (!stillPresent) n++;
         }
+
         return n;
     }
 
-    private POINTER_TYPE_INFO_TOUCH BuildInfo(uint pointerId, int x, int y, uint pressure, PointerFlags flags) =>
-        new()
+    private POINTER_TYPE_INFO_TOUCH BuildInfo(uint pointerId, int x, int y, uint pressure, PointerFlags flags)
+    {
+        return new POINTER_TYPE_INFO_TOUCH
         {
             type = User32.PT_TOUCH,
             touchInfo = new POINTER_TOUCH_INFO
@@ -168,6 +182,7 @@ public sealed class WindowsTouchInjectionOutput : ITouchOutput
                 pressure = pressure
             }
         };
+    }
 
     private unsafe void InjectBatch(POINTER_TYPE_INFO_TOUCH[] infos, uint count)
     {
@@ -177,5 +192,12 @@ public sealed class WindowsTouchInjectionOutput : ITouchOutput
             if (!User32.InjectSyntheticTouchInput(_device, p, count))
                 Trace.WriteLine($"InjectSyntheticPointerInput(touch) rejected: count={count} err={Marshal.GetLastWin32Error()}");
         }
+    }
+
+    private struct ActiveContact
+    {
+        public int TrackingId;
+        public int X, Y;
+        public uint Pressure;
     }
 }

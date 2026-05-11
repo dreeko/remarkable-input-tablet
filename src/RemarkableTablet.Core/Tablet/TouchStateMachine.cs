@@ -8,8 +8,8 @@ namespace RemarkableTablet.Core.Tablet;
 ///     boundaries and emits a complete TouchFrame on each SYN_REPORT.
 ///     This device (rM2 capacitive `pt_mt`) does NOT report BTN_TOUCH; contact
 ///     lifecycle is driven entirely by ABS_MT_TRACKING_ID:
-///         value &gt;= 0  → contact starts in the current slot
-///         value == -1  → contact in the current slot is released
+///     value &gt;= 0  → contact starts in the current slot
+///     value == -1  → contact in the current slot is released
 ///     SYN_DROPPED clears all contacts and emits an empty frame.
 /// </summary>
 public sealed class TouchStateMachine
@@ -55,9 +55,7 @@ public sealed class TouchStateMachine
     private void HandleSync(ushort code, ChannelWriter<TouchFrame> output)
     {
         if (code == EvdevCodes.SYN_REPORT)
-        {
             output.TryWrite(Snapshot());
-        }
         else if (code == EvdevCodes.SYN_DROPPED)
         {
             // Kernel ring overflow: release everything and emit empty so
@@ -119,6 +117,7 @@ public sealed class TouchStateMachine
             c = new MutableContact { Slot = _currentSlot, TrackingId = -1 };
             _slots[_currentSlot] = c;
         }
+
         return c;
     }
 
@@ -138,6 +137,7 @@ public sealed class TouchStateMachine
                 c.Slot, c.TrackingId, c.X, c.Y, c.Pressure,
                 c.TouchMajor, c.TouchMinor, c.Orientation, c.ToolType));
         }
+
         if (contacts.Count == 0) return TouchFrame.Empty;
         contacts.Sort(static (a, b) => a.Slot.CompareTo(b.Slot));
         return new TouchFrame(contacts);
@@ -146,8 +146,8 @@ public sealed class TouchStateMachine
     private sealed class MutableContact
     {
         public int Slot;
+        public int TouchMajor, TouchMinor, Orientation, ToolType;
         public int TrackingId = -1;
         public int X, Y, Pressure;
-        public int TouchMajor, TouchMinor, Orientation, ToolType;
     }
 }

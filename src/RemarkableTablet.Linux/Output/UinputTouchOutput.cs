@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using RemarkableTablet.Core.Output;
-using RemarkableTablet.Core.Tablet;
 using RemarkableTablet.Linux.Interop;
 
 namespace RemarkableTablet.Linux.Output;
@@ -9,37 +8,40 @@ namespace RemarkableTablet.Linux.Output;
 /// <summary>
 ///     Linux output: injects multi-touch contacts via the uinput kernel module
 ///     using the MT-B (slot) protocol. Creates a virtual touchscreen that
-///     reports up to <see cref="ReMarkable2Constants.TouchMaxTracked" />
-///     concurrent contacts to apps that read the Linux input subsystem.
+///     reports up to <c>maxTracked</c> concurrent contacts to apps that read
+///     the Linux input subsystem.
 ///     Same uinput permissions apply as <see cref="UinputOutput" />.
 /// </summary>
 public sealed class UinputTouchOutput : ITouchOutput
 {
-    private readonly int _screenW;
-    private readonly int _screenH;
-    private int _fd = -1;
-
     // Slots active in the previous frame, keyed by slot index. Value is the
     // tracking ID (cached so we don't re-emit ABS_MT_TRACKING_ID every frame).
     private readonly Dictionary<int, int> _activeSlots = new();
+    private readonly int _maxTracked;
+    private readonly int _screenH;
+    private readonly int _screenW;
     private bool _btnTouchDown;
     private int _currentEmittedSlot = -1;
+    private int _fd = -1;
 
-    public UinputTouchOutput(int screenW, int screenH)
+    public UinputTouchOutput(int screenW, int screenH, int maxTracked = 5)
     {
         _screenW = screenW;
         _screenH = screenH;
+        _maxTracked = maxTracked;
     }
 
     public void Initialize()
     {
         _fd = Libc.open("/dev/uinput", Libc.O_WRONLY | Libc.O_NONBLOCK);
         if (_fd < 0)
+        {
             throw new InvalidOperationException(
                 $"Cannot open /dev/uinput (errno {Marshal.GetLastWin32Error()}). " +
                 "Add yourself to the 'input' group: sudo usermod -aG input $USER");
+        }
 
-        Ioctl(UinputIoctl.UI_SET_EVBIT, EvType.EV_SYN);
+        Ioctl(UinputIoctl.UI_SET_EVBIT);
         Ioctl(UinputIoctl.UI_SET_EVBIT, EvType.EV_KEY);
         Ioctl(UinputIoctl.UI_SET_EVBIT, EvType.EV_ABS);
         Ioctl(UinputIoctl.UI_SET_PROPBIT, InputProp.INPUT_PROP_DIRECT);
@@ -58,12 +60,12 @@ public sealed class UinputTouchOutput : ITouchOutput
 
         SetupDevice();
 
-        SetAxis(AbsCode.ABS_MT_SLOT,        min: 0, max: ReMarkable2Constants.TouchMaxTracked - 1, fuzz: 0, flat: 0);
-        SetAxis(AbsCode.ABS_MT_POSITION_X,  min: 0, max: _screenW - 1,                              fuzz: 0, flat: 0);
-        SetAxis(AbsCode.ABS_MT_POSITION_Y,  min: 0, max: _screenH - 1,                              fuzz: 0, flat: 0);
-        SetAxis(AbsCode.ABS_MT_TRACKING_ID, min: 0, max: 65535,                                     fuzz: 0, flat: 0);
-        SetAxis(AbsCode.ABS_MT_PRESSURE,    min: 0, max: ReMarkable2Constants.WindowsPressureMax,   fuzz: 0, flat: 0);
-        SetAxis(AbsCode.ABS_MT_TOUCH_MAJOR, min: 0, max: 255,                                       fuzz: 0, flat: 0);
+        SetAxis(AbsCode.ABS_MT_SLOT, 0, _maxTracked - 1, 0, 0);
+        SetAxis(AbsCode.ABS_MT_POSITION_X, 0, _screenW - 1, 0, 0);
+        SetAxis(AbsCode.ABS_MT_POSITION_Y, 0, _screenH - 1, 0, 0);
+        SetAxis(AbsCode.ABS_MT_TRACKING_ID, 0, 65535, 0, 0);
+        SetAxis(AbsCode.ABS_MT_PRESSURE, 0, InjectionScale.PressureMax, 0, 0);
+        SetAxis(AbsCode.ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0);
 
         Ioctl(UinputIoctl.UI_DEV_CREATE);
 
@@ -83,7 +85,7 @@ public sealed class UinputTouchOutput : ITouchOutput
             // Cap the slot index to what the virtual device declared. Upstream
             // is supposed to respect TouchMaxTracked, but defend against an
             // out-of-range slot from a misbehaving frame.
-            if (c.Slot < 0 || c.Slot >= ReMarkable2Constants.TouchMaxTracked) continue;
+            if (c.Slot < 0 || c.Slot >= _maxTracked) continue;
 
             seenSlots.Add(c.Slot);
             SwitchSlot(c.Slot);
@@ -97,7 +99,7 @@ public sealed class UinputTouchOutput : ITouchOutput
 
             EmitEvent(EvType.EV_ABS, AbsCode.ABS_MT_POSITION_X, c.ScreenX);
             EmitEvent(EvType.EV_ABS, AbsCode.ABS_MT_POSITION_Y, c.ScreenY);
-            EmitEvent(EvType.EV_ABS, AbsCode.ABS_MT_PRESSURE,   (int)c.Pressure);
+            EmitEvent(EvType.EV_ABS, AbsCode.ABS_MT_PRESSURE, (int)c.Pressure);
             anyEmitted = true;
         }
 
@@ -106,7 +108,8 @@ public sealed class UinputTouchOutput : ITouchOutput
         {
             var toRelease = new List<int>();
             foreach (var slot in _activeSlots.Keys)
-                if (!seenSlots.Contains(slot)) toRelease.Add(slot);
+                if (!seenSlots.Contains(slot))
+                    toRelease.Add(slot);
             foreach (var slot in toRelease)
             {
                 SwitchSlot(slot);
@@ -137,6 +140,7 @@ public sealed class UinputTouchOutput : ITouchOutput
             SwitchSlot(slot);
             EmitEvent(EvType.EV_ABS, AbsCode.ABS_MT_TRACKING_ID, -1);
         }
+
         _activeSlots.Clear();
 
         if (_btnTouchDown)
@@ -195,19 +199,26 @@ public sealed class UinputTouchOutput : ITouchOutput
         Libc.write(_fd, &ev, (nuint)sizeof(input_event));
     }
 
-    private void EmitSyn() => EmitEvent(EvType.EV_SYN, SynCode.SYN_REPORT, 0);
+    private void EmitSyn()
+    {
+        EmitEvent(EvType.EV_SYN, SynCode.SYN_REPORT, 0);
+    }
 
     private void Ioctl(ulong request, int arg = 0)
     {
         if (Libc.ioctl_int(_fd, request, arg) < 0)
+        {
             throw new InvalidOperationException(
                 $"uinput ioctl 0x{request:X} failed (errno {Marshal.GetLastWin32Error()})");
+        }
     }
 
     private unsafe void IoctlPtr(ulong request, void* arg)
     {
         if (Libc.ioctl_ptr(_fd, request, arg) < 0)
+        {
             throw new InvalidOperationException(
                 $"uinput ioctl 0x{request:X} failed (errno {Marshal.GetLastWin32Error()})");
+        }
     }
 }

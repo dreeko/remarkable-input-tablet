@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using RemarkableTablet.Core.Devices;
 using RemarkableTablet.Core.Evdev;
 using RemarkableTablet.Core.Mapping;
 using RemarkableTablet.Core.Output;
@@ -11,7 +12,7 @@ namespace RemarkableTablet.Core.Pipeline;
 ///     Wires all pipeline stages together and owns the CancellationTokenSource.
 ///     Pen pipeline:   SshTransport(event1) → EvdevParser → TabletStateMachine → CoordinateMapper → IOutputMode
 ///     Touch pipeline: SshTransport(event2) → EvdevParser → TouchStateMachine → TouchCoordinateMapper → ITouchOutput
-///                     (touch wiring is optional — pen-only operation is unchanged)
+///     (touch wiring is optional — pen-only operation is unchanged)
 ///     Reconnects automatically on disconnect with exponential backoff.
 ///     Emits a synthetic pen-up and "all touch contacts released" before each
 ///     reconnection attempt so drawing applications don't get stuck pen-down
@@ -25,22 +26,31 @@ public sealed class TabletPipeline : IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly CoordinateMapper _mapper;
     private readonly IOutputMode _output;
+    private readonly DeviceProfile _profile;
     private readonly TouchCoordinateMapper? _touchMapper;
     private readonly ITouchOutput? _touchOutput;
 
     private readonly SshTransport _transport;
 
-    public TabletPipeline(SshTransport transport, CoordinateMapper mapper, IOutputMode output)
-        : this(transport, mapper, output, null, null) { }
+    public TabletPipeline(
+        SshTransport transport,
+        DeviceProfile profile,
+        CoordinateMapper mapper,
+        IOutputMode output)
+        : this(transport, profile, mapper, output, null, null)
+    {
+    }
 
     public TabletPipeline(
         SshTransport transport,
+        DeviceProfile profile,
         CoordinateMapper mapper,
         IOutputMode output,
         TouchCoordinateMapper? touchMapper,
         ITouchOutput? touchOutput)
     {
         _transport = transport;
+        _profile = profile;
         _output = output;
         _mapper = mapper;
         _touchMapper = touchMapper;
@@ -122,7 +132,7 @@ public sealed class TabletPipeline : IAsyncDisposable
     {
         await _transport.ConnectAsync(ct);
 
-        var penStream = _transport.OpenStream(ReMarkable2Constants.PenDevicePath, ct);
+        var penStream = _transport.OpenStream(_profile.PenDevicePath, ct);
 
         // Pen channels — evdev events at ~100 Hz; unbounded is cheap and
         // avoids mid-frame loss that would corrupt the next emitted PenFrame.
@@ -141,14 +151,14 @@ public sealed class TabletPipeline : IAsyncDisposable
 
         var tasks = new List<Task>(6)
         {
-            EvdevParser.RunAsync(penStream.Reader, penEvdevChannel.Writer, ct),
+            EvdevParser.RunAsync(penStream.Reader, penEvdevChannel.Writer, _profile.EventLayout, ct),
             TabletStateMachine.RunAsync(penEvdevChannel.Reader, penFrameChannel.Writer, ct),
             PenOutputLoopAsync(penFrameChannel.Reader, ct)
         };
 
         if (_touchMapper is not null && _touchOutput is not null)
         {
-            var touchStream = _transport.OpenStream(ReMarkable2Constants.TouchDevicePath, ct);
+            var touchStream = _transport.OpenStream(_profile.TouchDevicePath, ct);
 
             var touchEvdevChannel = Channel.CreateUnbounded<EvdevEvent>(new UnboundedChannelOptions
             {
@@ -163,7 +173,7 @@ public sealed class TabletPipeline : IAsyncDisposable
                 SingleWriter = true
             });
 
-            tasks.Add(EvdevParser.RunAsync(touchStream.Reader, touchEvdevChannel.Writer, ct));
+            tasks.Add(EvdevParser.RunAsync(touchStream.Reader, touchEvdevChannel.Writer, _profile.EventLayout, ct));
             tasks.Add(TouchStateMachine.RunAsync(touchEvdevChannel.Reader, touchFrameChannel.Writer, ct));
             tasks.Add(TouchOutputLoopAsync(touchFrameChannel.Reader, ct));
         }
