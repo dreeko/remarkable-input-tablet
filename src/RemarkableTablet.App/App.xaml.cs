@@ -128,7 +128,16 @@ public partial class App : Application
 
             var pipeline = new TabletPipeline(transport, profile, mapper, output, touchMapper, touchOutput);
             pipeline.ConnectionStateChanged += OnPipelineStateChanged;
-            pipeline.Error += ex => WriteLog($"Pipeline error: {ex}");
+            pipeline.Error += ex =>
+            {
+                WriteLog($"Pipeline error: {ex}");
+                // Forward to the UI so reconnect-loop failures (e.g. wrong IP,
+                // device asleep) show a useful message instead of a silent
+                // "Disconnected." Run on the dispatcher because the pipeline
+                // raises Error from a thread-pool thread.
+                var msg = ex.Message;
+                _ = Dispatcher.BeginInvoke(() => ConnectionErrorOccurred?.Invoke(msg));
+            };
 
             _pipeline = pipeline;
             transferred = true; // pipeline owns the transport from here
