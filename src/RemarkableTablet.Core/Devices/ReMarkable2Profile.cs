@@ -22,8 +22,13 @@ public static class ReMarkable2Profile
         PenDevicePath = "/dev/input/event1",
         TouchDevicePath = "/dev/input/event2",
         Pen = new PenAxes(
-            XMin: 0,    XMax: 20966, XResolution: 0,
-            YMin: 0,    YMax: 15725, YResolution: 0,
+            // Resolution = 100 ticks/mm follows FreeCap23/reMarkable-tablet-driver;
+            // libinput uses this to recognise the virtual uinput device as a
+            // tablet on Wayland. Prior to this value being set, Linux Wayland
+            // users sometimes saw the device categorised as generic absolute
+            // input rather than a tablet.
+            XMin: 0,    XMax: 20966, XResolution: 100,
+            YMin: 0,    YMax: 15725, YResolution: 100,
             PressureMin: 0, PressureMax: 4095,
             TiltXMin: -9000, TiltXMax: 9000,
             TiltYMin: -9000, TiltYMax: 9000,

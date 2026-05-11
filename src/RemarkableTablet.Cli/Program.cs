@@ -89,7 +89,7 @@ IOutputMode output;
 #if WINDOWS_PLATFORM
 output = outputMode == "mouse" ? new MouseOutput() : new WindowsInkOutput();
 #elif LINUX_PLATFORM
-output = new UinputOutput(screenW, screenH);
+output = new UinputOutput(screenW, screenH, profile.Pen);
 #endif
 
 // Touch wiring — currently only `touch` mode and only on Linux. Windows

@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using RemarkableTablet.Core.Devices;
 using RemarkableTablet.Core.Output;
 using RemarkableTablet.Linux.Interop;
 
@@ -20,13 +21,15 @@ public sealed class UinputOutput : IOutputMode
 {
     private readonly int _screenW;
     private readonly int _screenH;
+    private readonly PenAxes _penAxes;
     private int  _fd = -1;
     private bool _wasInRange;
 
-    public UinputOutput(int screenW, int screenH)
+    public UinputOutput(int screenW, int screenH, PenAxes penAxes)
     {
         _screenW = screenW;
         _screenH = screenH;
+        _penAxes = penAxes;
     }
 
     public void Initialize()
@@ -59,12 +62,15 @@ public sealed class UinputOutput : IOutputMode
 
         SetupDevice();
 
-        // Axis ranges match MappedFrame units so values inject directly without re-scaling
-        SetAxis(AbsCode.ABS_X,        min: 0,   max: _screenW - 1, fuzz: 0, flat: 0);
-        SetAxis(AbsCode.ABS_Y,        min: 0,   max: _screenH - 1, fuzz: 0, flat: 0);
-        SetAxis(AbsCode.ABS_PRESSURE, min: 0,   max: 1024,          fuzz: 4, flat: 0);
-        SetAxis(AbsCode.ABS_TILT_X,   min: -90, max: 90,            fuzz: 0, flat: 0);
-        SetAxis(AbsCode.ABS_TILT_Y,   min: -90, max: 90,            fuzz: 0, flat: 0);
+        // Axis ranges match MappedFrame units so values inject directly without re-scaling.
+        // ABS_X/Y resolution from the device profile is what makes libinput
+        // recognise this virtual device as a tablet on Wayland — see FreeCap23/
+        // reMarkable-tablet-driver for the original observation.
+        SetAxis(AbsCode.ABS_X,        min: 0,   max: _screenW - 1, fuzz: 0, flat: 0, resolution: _penAxes.XResolution);
+        SetAxis(AbsCode.ABS_Y,        min: 0,   max: _screenH - 1, fuzz: 0, flat: 0, resolution: _penAxes.YResolution);
+        SetAxis(AbsCode.ABS_PRESSURE, min: 0,   max: InjectionScale.PressureMax, fuzz: 4, flat: 0);
+        SetAxis(AbsCode.ABS_TILT_X,   min: InjectionScale.TiltMin, max: InjectionScale.TiltMax, fuzz: 0, flat: 0);
+        SetAxis(AbsCode.ABS_TILT_Y,   min: InjectionScale.TiltMin, max: InjectionScale.TiltMax, fuzz: 0, flat: 0);
 
         Ioctl(UinputIoctl.UI_DEV_CREATE);
 
@@ -147,12 +153,16 @@ public sealed class UinputOutput : IOutputMode
         IoctlPtr(UinputIoctl.UI_DEV_SETUP, &setup);
     }
 
-    private unsafe void SetAxis(ushort code, int min, int max, int fuzz, int flat)
+    private unsafe void SetAxis(ushort code, int min, int max, int fuzz, int flat, int resolution = 0)
     {
         var abs = new uinput_abs_setup
         {
             code = code,
-            absinfo = new input_absinfo { minimum = min, maximum = max, fuzz = fuzz, flat = flat }
+            absinfo = new input_absinfo
+            {
+                minimum = min, maximum = max, fuzz = fuzz, flat = flat,
+                resolution = (uint)resolution
+            }
         };
         IoctlPtr(UinputIoctl.UI_ABS_SETUP, &abs);
     }
