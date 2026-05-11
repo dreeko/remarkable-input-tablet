@@ -6,10 +6,15 @@ namespace RemarkableTablet.Core.Tests;
 
 public class GestureEngineTests
 {
-    private static MappedTouchContact C(int trackingId, int x, int y, int slot = 0) =>
-        new(slot, trackingId, x, y, 0);
+    private static MappedTouchContact C(int trackingId, int x, int y, int slot = 0)
+    {
+        return new MappedTouchContact(slot, trackingId, x, y, 0);
+    }
 
-    private static MappedTouchFrame Frame(params MappedTouchContact[] contacts) => new(contacts);
+    private static MappedTouchFrame Frame(params MappedTouchContact[] contacts)
+    {
+        return new MappedTouchFrame(contacts);
+    }
 
     [Fact]
     public void NoGestureUntilTwoContactsArrive()
@@ -24,7 +29,7 @@ public class GestureEngineTests
     public void TwoContacts_EmitsBeginWithCentroid()
     {
         var engine = new GestureEngine();
-        var ev = engine.Process(Frame(C(1, 100, 100, slot: 0), C(2, 300, 500, slot: 1)));
+        var ev = engine.Process(Frame(C(1, 100, 100, 0), C(2, 300, 500, 1)));
 
         var begin = Assert.IsType<GestureBegin>(Assert.Single(ev));
         Assert.Equal(200, begin.CenterX);
@@ -60,7 +65,7 @@ public class GestureEngineTests
 
         var pinch = ev.OfType<GesturePinch>().Single();
         Assert.True(pinch.ScaleDelta > 1.0, $"expected >1.0 got {pinch.ScaleDelta}");
-        Assert.Equal(2.0, pinch.ScaleDelta, precision: 6);
+        Assert.Equal(2.0, pinch.ScaleDelta, 6);
     }
 
     [Fact]
@@ -71,7 +76,7 @@ public class GestureEngineTests
         var ev = engine.Process(Frame(C(1, 50, 100), C(2, 150, 100))); // distance 100
 
         var pinch = ev.OfType<GesturePinch>().Single();
-        Assert.Equal(0.5, pinch.ScaleDelta, precision: 6);
+        Assert.Equal(0.5, pinch.ScaleDelta, 6);
     }
 
     [Fact]
@@ -86,7 +91,7 @@ public class GestureEngineTests
         var ev = engine.Process(Frame(C(1, 50, -50), C(2, 50, 50)));
 
         var rotate = ev.OfType<GestureRotate>().Single();
-        Assert.Equal(90.0, rotate.DegreesDelta, precision: 4);
+        Assert.Equal(90.0, rotate.DegreesDelta, 4);
     }
 
     [Fact]
@@ -121,7 +126,7 @@ public class GestureEngineTests
         engine.Process(Frame(C(1, 0, 0), C(2, 100, 0)));
 
         // Third finger lands; both anchors still present — gesture continues.
-        var ev = engine.Process(Frame(C(1, 0, 0), C(2, 100, 0), C(3, 50, 50, slot: 2)));
+        var ev = engine.Process(Frame(C(1, 0, 0), C(2, 100, 0), C(3, 50, 50, 2)));
 
         // Anchors haven't moved, so no pan/pinch/rotate.
         Assert.Empty(ev);

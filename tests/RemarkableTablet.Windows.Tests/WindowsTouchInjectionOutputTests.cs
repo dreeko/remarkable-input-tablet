@@ -6,10 +6,15 @@ namespace RemarkableTablet.Windows.Tests;
 
 public class WindowsTouchInjectionOutputTests
 {
-    private static MappedTouchContact C(int slot, int x, int y, int trackingId = 0, uint pressure = 256) =>
-        new(slot, trackingId == 0 ? slot + 1000 : trackingId, x, y, pressure);
+    private static MappedTouchContact C(int slot, int x, int y, int trackingId = 0, uint pressure = 256)
+    {
+        return new MappedTouchContact(slot, trackingId == 0 ? slot + 1000 : trackingId, x, y, pressure);
+    }
 
-    private static MappedTouchFrame F(params MappedTouchContact[] cs) => new(cs);
+    private static MappedTouchFrame F(params MappedTouchContact[] cs)
+    {
+        return new MappedTouchFrame(cs);
+    }
 
     [Fact]
     public void Initialize_CreatesDeviceSuccessfully()

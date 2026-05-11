@@ -9,8 +9,8 @@ namespace RemarkableTablet.Core.Mapping;
 ///     (screen pixels). Mirrors <see cref="CoordinateMapper" /> but for the
 ///     touch coordinate range, with no tilt or pressure-curve handling.
 ///     Touch coordinate axes on the rM2 (verified pt_mt driver):
-///       ABS_MT_POSITION_X is the SHORT axis (0..1403).
-///       ABS_MT_POSITION_Y is the LONG axis  (0..1871).
+///     ABS_MT_POSITION_X is the SHORT axis (0..1403).
+///     ABS_MT_POSITION_Y is the LONG axis  (0..1871).
 ///     This is *opposite* to the pen, where ABS_X is the long axis. The
 ///     orientation rotation cases below account for that — they are not
 ///     copy-paste of the pen mapper.
@@ -47,11 +47,11 @@ public sealed class TouchCoordinateMapper
         // for portrait.
         var (rx, ry) = _opts.Orientation switch
         {
-            Orientation.Portrait         => (nx,        ny),
-            Orientation.Landscape        => (ny,        1.0 - nx),
-            Orientation.PortraitFlipped  => (1.0 - nx,  1.0 - ny),
-            Orientation.LandscapeFlipped => (1.0 - ny,  nx),
-            _                            => (nx,        ny)
+            Orientation.Portrait => (nx, ny),
+            Orientation.Landscape => (ny, 1.0 - nx),
+            Orientation.PortraitFlipped => (1.0 - nx, 1.0 - ny),
+            Orientation.LandscapeFlipped => (1.0 - ny, nx),
+            _ => (nx, ny)
         };
 
         // Apply tablet area crop, identical to pen mapper.

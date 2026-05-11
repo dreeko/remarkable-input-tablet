@@ -28,7 +28,9 @@ public class EvdevParserTests
     }
 
     private static byte[] MakeEvent(ushort type, ushort code, int value)
-        => MakeEvent(Layout32, type, code, value);
+    {
+        return MakeEvent(Layout32, type, code, value);
+    }
 
     [Fact]
     public async Task ParsesSingleEvent()

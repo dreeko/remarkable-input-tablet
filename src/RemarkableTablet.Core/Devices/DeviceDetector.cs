@@ -37,10 +37,13 @@ public static class DeviceDetector
     ///     Selects a profile by short name. Used for the <c>--device</c> CLI
     ///     flag and the GUI dropdown.
     /// </summary>
-    public static DeviceProfile? ByName(string? name) => (name ?? "").Trim().ToLowerInvariant() switch
+    public static DeviceProfile? ByName(string? name)
     {
-        "rm2" or "remarkable2" or "remarkable 2" => ReMarkable2Profile.Instance,
-        "rmpp" or "paperpro" or "paper pro" or "remarkable paper pro" => ReMarkablePaperProProfile.Instance,
-        _ => null
-    };
+        return (name ?? "").Trim().ToLowerInvariant() switch
+        {
+            "rm2" or "remarkable2" or "remarkable 2" => ReMarkable2Profile.Instance,
+            "rmpp" or "paperpro" or "paper pro" or "remarkable paper pro" => ReMarkablePaperProProfile.Instance,
+            _ => null
+        };
+    }
 }

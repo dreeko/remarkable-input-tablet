@@ -5,6 +5,8 @@ using RemarkableTablet.Core.Transport;
 using Renci.SshNet;
 using Application = System.Windows.Application;
 using Brushes = System.Windows.Media.Brushes;
+using Button = System.Windows.Controls.Button;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using TabletOrientation = RemarkableTablet.Core.Mapping.Orientation;
 
 namespace RemarkableTablet.App;
@@ -49,9 +51,9 @@ public partial class SettingsWindow : Window
         AddressBox.Text = s.Host;
         DeviceBox.SelectedIndex = s.Device switch
         {
-            "rm2"  => 1,
+            "rm2" => 1,
             "rmpp" => 2,
-            _      => 0  // auto
+            _ => 0 // auto
         };
         if (MonitorBox.Items.Count > 0)
             MonitorBox.SelectedIndex = Math.Max(0, Math.Min(s.MonitorIndex, MonitorBox.Items.Count - 1));
@@ -68,7 +70,7 @@ public partial class SettingsWindow : Window
         {
             "soft" => 1,
             "hard" => 2,
-            _      => 0
+            _ => 0
         };
         GesturesBox.IsChecked = s.Gestures == "touch";
         AutoConnectBox.IsChecked = s.AutoConnect;
@@ -107,7 +109,7 @@ public partial class SettingsWindow : Window
         s.Save();
     }
 
-    private void OnPasswordKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    private void OnPasswordKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter) return;
         if (string.IsNullOrWhiteSpace(PasswordBox.Password)) return;
@@ -178,7 +180,7 @@ public partial class SettingsWindow : Window
 
     private async void TestConnection_Click(object sender, RoutedEventArgs e)
     {
-        var btn = sender as System.Windows.Controls.Button;
+        var btn = sender as Button;
         var password = PasswordBox.Password;
         var address = AddressBox.Text.Trim();
 

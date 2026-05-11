@@ -12,7 +12,7 @@ namespace RemarkableTablet.Core.Pipeline;
 ///     Wires all pipeline stages together and owns the CancellationTokenSource.
 ///     Pen pipeline:   SshTransport(event1) → EvdevParser → TabletStateMachine → CoordinateMapper → IOutputMode
 ///     Touch pipeline: SshTransport(event2) → EvdevParser → TouchStateMachine → TouchCoordinateMapper → ITouchOutput
-///                     (touch wiring is optional — pen-only operation is unchanged)
+///     (touch wiring is optional — pen-only operation is unchanged)
 ///     Reconnects automatically on disconnect with exponential backoff.
 ///     Emits a synthetic pen-up and "all touch contacts released" before each
 ///     reconnection attempt so drawing applications don't get stuck pen-down
@@ -37,7 +37,9 @@ public sealed class TabletPipeline : IAsyncDisposable
         DeviceProfile profile,
         CoordinateMapper mapper,
         IOutputMode output)
-        : this(transport, profile, mapper, output, null, null) { }
+        : this(transport, profile, mapper, output, null, null)
+    {
+    }
 
     public TabletPipeline(
         SshTransport transport,

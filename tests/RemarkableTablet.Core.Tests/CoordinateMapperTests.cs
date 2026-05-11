@@ -143,7 +143,7 @@ public class CoordinateMapperTests
         var softMapped = softMapper.Map(MakeFrame(0, 0, rawPressure));
         var linMapped = linMapper.Map(MakeFrame(0, 0, rawPressure));
 
-        Assert.InRange(linMapped.Pressure,  254u, 258u);
+        Assert.InRange(linMapped.Pressure, 254u, 258u);
         Assert.InRange(softMapped.Pressure, 315u, 322u);
     }
 
@@ -164,10 +164,25 @@ public class CoordinateMapperTests
         return (m.TiltX, m.TiltY);
     }
 
-    [Fact] public void Tilt_PortraitRotates()         => Assert.Equal((0,    90), TiltAfter(Orientation.Portrait));
-    [Fact] public void Tilt_LandscapeRotates()        => Assert.Equal((90,    0), TiltAfter(Orientation.Landscape));
-    [Fact] public void Tilt_PortraitFlippedRotates()  => Assert.Equal((0,   -90), TiltAfter(Orientation.PortraitFlipped));
-    [Fact] public void Tilt_LandscapeFlippedPasses()  => Assert.Equal((-90,   0), TiltAfter(Orientation.LandscapeFlipped));
+    [Fact] public void Tilt_PortraitRotates()
+    {
+        Assert.Equal((0, 90), TiltAfter(Orientation.Portrait));
+    }
+
+    [Fact] public void Tilt_LandscapeRotates()
+    {
+        Assert.Equal((90, 0), TiltAfter(Orientation.Landscape));
+    }
+
+    [Fact] public void Tilt_PortraitFlippedRotates()
+    {
+        Assert.Equal((0, -90), TiltAfter(Orientation.PortraitFlipped));
+    }
+
+    [Fact] public void Tilt_LandscapeFlippedPasses()
+    {
+        Assert.Equal((-90, 0), TiltAfter(Orientation.LandscapeFlipped));
+    }
 
     // ── PressureCurve.FromName ────────────────────────────────────────────────
 
@@ -182,7 +197,7 @@ public class CoordinateMapperTests
     {
         var curve = PressureCurve.FromName(name);
         // Linear curve maps t to t exactly (within float precision).
-        Assert.Equal(0.5, curve.Apply(0.5), precision: 6);
+        Assert.Equal(0.5, curve.Apply(0.5), 6);
     }
 
     [Fact]

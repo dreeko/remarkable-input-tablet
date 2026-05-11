@@ -14,11 +14,11 @@ public sealed class GestureEngine
 {
     private bool _active;
     private int _anchorIdA, _anchorIdB;
+    private double _prevAngleDeg;
+    private int _prevCenterX, _prevCenterY;
 
     // Previous-frame state (only valid while _active).
     private double _prevDistance;
-    private double _prevAngleDeg;
-    private int _prevCenterX, _prevCenterY;
 
     /// <summary>
     ///     Process the next mapped touch frame. Returns zero or more
@@ -40,10 +40,8 @@ public sealed class GestureEngine
         // Active — find the anchor contacts in this frame.
         MappedTouchContact? a = null, b = null;
         foreach (var c in contacts)
-        {
             if (c.TrackingId == _anchorIdA) a = c;
             else if (c.TrackingId == _anchorIdB) b = c;
-        }
         if (a is null || b is null)
             return End();
 
@@ -88,7 +86,7 @@ public sealed class GestureEngine
         var events = new List<GestureEvent>(3);
         if (dx != 0 || dy != 0) events.Add(new GesturePan(dx, dy));
         if (scaleDelta != 1.0) events.Add(new GesturePinch(scaleDelta));
-        if (degDelta != 0.0)   events.Add(new GestureRotate(degDelta));
+        if (degDelta != 0.0) events.Add(new GestureRotate(degDelta));
         return events;
     }
 
@@ -114,7 +112,7 @@ public sealed class GestureEngine
 
     private static double NormalizeDegrees(double d)
     {
-        while (d > 180.0)  d -= 360.0;
+        while (d > 180.0) d -= 360.0;
         while (d <= -180.0) d += 360.0;
         return d;
     }

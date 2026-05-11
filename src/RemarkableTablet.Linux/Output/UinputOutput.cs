@@ -11,18 +11,17 @@ namespace RemarkableTablet.Linux.Output;
 ///     Creates a virtual tablet device that reports absolute position, pressure,
 ///     tilt, hover, and eraser to apps that read the Linux input subsystem
 ///     (Krita, GIMP, Inkscape, MyPaint, etc.).
-///
 ///     Prerequisites:
-///       sudo usermod -aG input $USER   (log out and back in)
+///     sudo usermod -aG input $USER   (log out and back in)
 ///     Or create /etc/udev/rules.d/70-uinput.rules:
-///       KERNEL=="uinput", GROUP="input", MODE="0660"
+///     KERNEL=="uinput", GROUP="input", MODE="0660"
 /// </summary>
 public sealed class UinputOutput : IOutputMode
 {
-    private readonly int _screenW;
-    private readonly int _screenH;
     private readonly PenAxes _penAxes;
-    private int  _fd = -1;
+    private readonly int _screenH;
+    private readonly int _screenW;
+    private int _fd = -1;
     private bool _wasInRange;
 
     public UinputOutput(int screenW, int screenH, PenAxes penAxes)
@@ -36,12 +35,14 @@ public sealed class UinputOutput : IOutputMode
     {
         _fd = Libc.open("/dev/uinput", Libc.O_WRONLY | Libc.O_NONBLOCK);
         if (_fd < 0)
+        {
             throw new InvalidOperationException(
                 $"Cannot open /dev/uinput (errno {Marshal.GetLastWin32Error()}). " +
                 "Add yourself to the 'input' group: sudo usermod -aG input $USER");
+        }
 
         // Declare event types this device produces
-        Ioctl(UinputIoctl.UI_SET_EVBIT, EvType.EV_SYN);
+        Ioctl(UinputIoctl.UI_SET_EVBIT);
         Ioctl(UinputIoctl.UI_SET_EVBIT, EvType.EV_KEY);
         Ioctl(UinputIoctl.UI_SET_EVBIT, EvType.EV_ABS);
         // INPUT_PROP_DIRECT: absolute coordinates map 1:1 to display pixels
@@ -54,7 +55,7 @@ public sealed class UinputOutput : IOutputMode
         Ioctl(UinputIoctl.UI_SET_KEYBIT, BtnCode.BTN_STYLUS);
 
         // Absolute axis capabilities
-        Ioctl(UinputIoctl.UI_SET_ABSBIT, AbsCode.ABS_X);
+        Ioctl(UinputIoctl.UI_SET_ABSBIT);
         Ioctl(UinputIoctl.UI_SET_ABSBIT, AbsCode.ABS_Y);
         Ioctl(UinputIoctl.UI_SET_ABSBIT, AbsCode.ABS_PRESSURE);
         Ioctl(UinputIoctl.UI_SET_ABSBIT, AbsCode.ABS_TILT_X);
@@ -66,11 +67,11 @@ public sealed class UinputOutput : IOutputMode
         // ABS_X/Y resolution from the device profile is what makes libinput
         // recognise this virtual device as a tablet on Wayland — see FreeCap23/
         // reMarkable-tablet-driver for the original observation.
-        SetAxis(AbsCode.ABS_X,        min: 0,   max: _screenW - 1, fuzz: 0, flat: 0, resolution: _penAxes.XResolution);
-        SetAxis(AbsCode.ABS_Y,        min: 0,   max: _screenH - 1, fuzz: 0, flat: 0, resolution: _penAxes.YResolution);
-        SetAxis(AbsCode.ABS_PRESSURE, min: 0,   max: InjectionScale.PressureMax, fuzz: 4, flat: 0);
-        SetAxis(AbsCode.ABS_TILT_X,   min: InjectionScale.TiltMin, max: InjectionScale.TiltMax, fuzz: 0, flat: 0);
-        SetAxis(AbsCode.ABS_TILT_Y,   min: InjectionScale.TiltMin, max: InjectionScale.TiltMax, fuzz: 0, flat: 0);
+        SetAxis(AbsCode.ABS_X, 0, _screenW - 1, 0, 0, _penAxes.XResolution);
+        SetAxis(AbsCode.ABS_Y, 0, _screenH - 1, 0, 0, _penAxes.YResolution);
+        SetAxis(AbsCode.ABS_PRESSURE, 0, InjectionScale.PressureMax, 4, 0);
+        SetAxis(AbsCode.ABS_TILT_X, InjectionScale.TiltMin, InjectionScale.TiltMax, 0, 0);
+        SetAxis(AbsCode.ABS_TILT_Y, InjectionScale.TiltMin, InjectionScale.TiltMax, 0, 0);
 
         Ioctl(UinputIoctl.UI_DEV_CREATE);
 
@@ -86,36 +87,37 @@ public sealed class UinputOutput : IOutputMode
         {
             if (_wasInRange)
             {
-                EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOUCH,       0);
-                EmitEvent(EvType.EV_KEY, BtnCode.BTN_STYLUS,      0);
-                EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOOL_PEN,    0);
+                EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOUCH, 0);
+                EmitEvent(EvType.EV_KEY, BtnCode.BTN_STYLUS, 0);
+                EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOOL_PEN, 0);
                 EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOOL_RUBBER, 0);
                 EmitSyn();
                 _wasInRange = false;
             }
+
             return;
         }
 
         _wasInRange = true;
 
-        EmitEvent(EvType.EV_ABS, AbsCode.ABS_X,        frame.ScreenX);
-        EmitEvent(EvType.EV_ABS, AbsCode.ABS_Y,        frame.ScreenY);
+        EmitEvent(EvType.EV_ABS, AbsCode.ABS_X, frame.ScreenX);
+        EmitEvent(EvType.EV_ABS, AbsCode.ABS_Y, frame.ScreenY);
         EmitEvent(EvType.EV_ABS, AbsCode.ABS_PRESSURE, (int)frame.Pressure);
-        EmitEvent(EvType.EV_ABS, AbsCode.ABS_TILT_X,   frame.TiltX);
-        EmitEvent(EvType.EV_ABS, AbsCode.ABS_TILT_Y,   frame.TiltY);
+        EmitEvent(EvType.EV_ABS, AbsCode.ABS_TILT_X, frame.TiltX);
+        EmitEvent(EvType.EV_ABS, AbsCode.ABS_TILT_Y, frame.TiltY);
 
         if (frame.IsEraser)
         {
-            EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOOL_PEN,    0);
+            EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOOL_PEN, 0);
             EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOOL_RUBBER, 1);
         }
         else
         {
-            EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOOL_PEN,    1);
+            EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOOL_PEN, 1);
             EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOOL_RUBBER, 0);
         }
 
-        EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOUCH,  frame.IsTouch || frame.Pressure > 0 ? 1 : 0);
+        EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOUCH, frame.IsTouch || frame.Pressure > 0 ? 1 : 0);
         EmitEvent(EvType.EV_KEY, BtnCode.BTN_STYLUS, frame.BarrelButton ? 1 : 0);
         EmitSyn();
     }
@@ -126,9 +128,9 @@ public sealed class UinputOutput : IOutputMode
 
         if (_wasInRange)
         {
-            EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOUCH,       0);
-            EmitEvent(EvType.EV_KEY, BtnCode.BTN_STYLUS,      0);
-            EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOOL_PEN,    0);
+            EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOUCH, 0);
+            EmitEvent(EvType.EV_KEY, BtnCode.BTN_STYLUS, 0);
+            EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOOL_PEN, 0);
             EmitEvent(EvType.EV_KEY, BtnCode.BTN_TOOL_RUBBER, 0);
             EmitSyn();
         }
@@ -173,19 +175,26 @@ public sealed class UinputOutput : IOutputMode
         Libc.write(_fd, &ev, (nuint)sizeof(input_event));
     }
 
-    private void EmitSyn() => EmitEvent(EvType.EV_SYN, SynCode.SYN_REPORT, 0);
+    private void EmitSyn()
+    {
+        EmitEvent(EvType.EV_SYN, SynCode.SYN_REPORT, 0);
+    }
 
     private void Ioctl(ulong request, int arg = 0)
     {
         if (Libc.ioctl_int(_fd, request, arg) < 0)
+        {
             throw new InvalidOperationException(
                 $"uinput ioctl 0x{request:X} failed (errno {Marshal.GetLastWin32Error()})");
+        }
     }
 
     private unsafe void IoctlPtr(ulong request, void* arg)
     {
         if (Libc.ioctl_ptr(_fd, request, arg) < 0)
+        {
             throw new InvalidOperationException(
                 $"uinput ioctl 0x{request:X} failed (errno {Marshal.GetLastWin32Error()})");
+        }
     }
 }

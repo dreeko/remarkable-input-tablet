@@ -37,8 +37,8 @@ public sealed record DeviceProfile
 /// </summary>
 public sealed record EvdevLayout(int StructSize, int TypeOffset, int CodeOffset, int ValueOffset)
 {
-    public static EvdevLayout Bits32 { get; } = new(StructSize: 16, TypeOffset: 8,  CodeOffset: 10, ValueOffset: 12);
-    public static EvdevLayout Bits64 { get; } = new(StructSize: 24, TypeOffset: 16, CodeOffset: 18, ValueOffset: 20);
+    public static EvdevLayout Bits32 { get; } = new(16, 8, 10, 12);
+    public static EvdevLayout Bits64 { get; } = new(24, 16, 18, 20);
 }
 
 /// <summary>
@@ -47,12 +47,20 @@ public sealed record EvdevLayout(int StructSize, int TypeOffset, int CodeOffset,
 ///     tablet recognition; 0 means "not declared."
 /// </summary>
 public sealed record PenAxes(
-    int XMin, int XMax, int XResolution,
-    int YMin, int YMax, int YResolution,
-    int PressureMin, int PressureMax,
-    int TiltXMin, int TiltXMax,
-    int TiltYMin, int TiltYMax,
-    int DistanceMin, int DistanceMax);
+    int XMin,
+    int XMax,
+    int XResolution,
+    int YMin,
+    int YMax,
+    int YResolution,
+    int PressureMin,
+    int PressureMax,
+    int TiltXMin,
+    int TiltXMax,
+    int TiltYMin,
+    int TiltYMax,
+    int DistanceMin,
+    int DistanceMax);
 
 /// <summary>
 ///     Touchscreen axis ranges. <c>MaxSlots</c> is what the kernel reports;
@@ -60,7 +68,11 @@ public sealed record PenAxes(
 ///     state for (enough for two-finger gestures plus margin).
 /// </summary>
 public sealed record TouchAxes(
-    int XMin, int XMax,
-    int YMin, int YMax,
-    int PressureMin, int PressureMax,
-    int MaxSlots, int MaxTracked);
+    int XMin,
+    int XMax,
+    int YMin,
+    int YMax,
+    int PressureMin,
+    int PressureMax,
+    int MaxSlots,
+    int MaxTracked);

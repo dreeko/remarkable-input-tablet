@@ -36,11 +36,11 @@ public sealed class CoordinateMapper
         // agree on screen direction in every orientation.
         var (rx, ry) = _opts.Orientation switch
         {
-            Orientation.Portrait         => (1.0 - ny, nx),
-            Orientation.Landscape        => (nx,        ny),
-            Orientation.PortraitFlipped  => (ny,        1.0 - nx),
-            Orientation.LandscapeFlipped => (1.0 - nx,  1.0 - ny),
-            _                            => (1.0 - ny, nx)
+            Orientation.Portrait => (1.0 - ny, nx),
+            Orientation.Landscape => (nx, ny),
+            Orientation.PortraitFlipped => (ny, 1.0 - nx),
+            Orientation.LandscapeFlipped => (1.0 - nx, 1.0 - ny),
+            _ => (1.0 - ny, nx)
         };
 
         // Apply tablet area crop (user-selected active region)
@@ -91,12 +91,15 @@ public sealed class CoordinateMapper
     ///     Sign convention follows Windows Ink (positive = pen leans toward +X / +Y axis).
     ///     Convention may need empirical adjustment — see README "Hardware details".
     /// </summary>
-    private static (int X, int Y) RotateTilt(int tx, int ty, Orientation o) => o switch
+    private static (int X, int Y) RotateTilt(int tx, int ty, Orientation o)
     {
-        Orientation.Portrait         => (-ty,  tx),
-        Orientation.Landscape        => ( tx,  ty),
-        Orientation.PortraitFlipped  => ( ty, -tx),
-        Orientation.LandscapeFlipped => (-tx, -ty),
-        _                            => (-ty,  tx)
-    };
+        return o switch
+        {
+            Orientation.Portrait => (-ty, tx),
+            Orientation.Landscape => (tx, ty),
+            Orientation.PortraitFlipped => (ty, -tx),
+            Orientation.LandscapeFlipped => (-tx, -ty),
+            _ => (-ty, tx)
+        };
+    }
 }

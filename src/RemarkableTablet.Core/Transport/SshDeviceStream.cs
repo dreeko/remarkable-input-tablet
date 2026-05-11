@@ -44,7 +44,10 @@ public sealed class SshDeviceStream
     internal void DisposeCommand()
     {
         try { _command.Dispose(); }
-        catch { /* best-effort — we're tearing down anyway */ }
+        catch
+        {
+            /* best-effort — we're tearing down anyway */
+        }
     }
 
     /// <summary>

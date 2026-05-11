@@ -56,7 +56,11 @@ public static class EvdevParser
             // only unblock when the underlying SshCommand is disposed. Completing
             // the reader makes the next FlushAsync return IsCompleted=true so
             // the pump exits cleanly.
-            try { reader.Complete(); } catch { /* idempotent — already completed */ }
+            try { reader.Complete(); }
+            catch
+            {
+                /* idempotent — already completed */
+            }
         }
     }
 
@@ -73,8 +77,8 @@ public static class EvdevParser
 
     private static EvdevEvent ParseSpan(ReadOnlySpan<byte> span, EvdevLayout layout)
     {
-        var type  = BinaryPrimitives.ReadUInt16LittleEndian(span[layout.TypeOffset..]);
-        var code  = BinaryPrimitives.ReadUInt16LittleEndian(span[layout.CodeOffset..]);
+        var type = BinaryPrimitives.ReadUInt16LittleEndian(span[layout.TypeOffset..]);
+        var code = BinaryPrimitives.ReadUInt16LittleEndian(span[layout.CodeOffset..]);
         var value = BinaryPrimitives.ReadInt32LittleEndian(span[layout.ValueOffset..]);
         return new EvdevEvent(type, code, value);
     }

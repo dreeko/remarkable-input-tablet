@@ -1,4 +1,3 @@
-using System.IO.Pipelines;
 using Renci.SshNet;
 
 namespace RemarkableTablet.Core.Transport;
@@ -104,7 +103,12 @@ public sealed class SshTransport : IAsyncDisposable
         foreach (var s in _streams)
             await s.AwaitPumpAsync(pumpTimeout);
 
-        try { _client?.Disconnect(); } catch { /* best-effort */ }
+        try { _client?.Disconnect(); }
+        catch
+        {
+            /* best-effort */
+        }
+
         _client?.Dispose();
 
         _streams.Clear();

@@ -10,15 +10,20 @@ public class TouchCoordinateMapperTests
 {
     private static readonly DeviceProfile Rm2 = ReMarkable2Profile.Instance;
 
-    private static TouchContact Contact(int x, int y, int pressure = 100, int slot = 0, int trackingId = 1) =>
-        new(slot, trackingId, x, y, pressure, 0, 0, 0, 0);
+    private static TouchContact Contact(int x, int y, int pressure = 100, int slot = 0, int trackingId = 1)
+    {
+        return new TouchContact(slot, trackingId, x, y, pressure, 0, 0, 0, 0);
+    }
 
-    private static TouchFrame Frame(params TouchContact[] contacts) => new(contacts);
+    private static TouchFrame Frame(params TouchContact[] contacts)
+    {
+        return new TouchFrame(contacts);
+    }
 
     [Fact]
     public void Portrait_TopLeftMapsToScreenTopLeft()
     {
-        var opts = MappingOptions.ForScreen(1920, 1080, Orientation.Portrait);
+        var opts = MappingOptions.ForScreen(1920, 1080);
         var mapper = new TouchCoordinateMapper(opts, Rm2);
 
         var f = mapper.Map(Frame(Contact(0, 0)));
@@ -30,7 +35,7 @@ public class TouchCoordinateMapperTests
     [Fact]
     public void Portrait_BottomRightMapsToScreenBottomRight()
     {
-        var opts = MappingOptions.ForScreen(1920, 1080, Orientation.Portrait);
+        var opts = MappingOptions.ForScreen(1920, 1080);
         var mapper = new TouchCoordinateMapper(opts, Rm2);
 
         var f = mapper.Map(Frame(Contact(
@@ -59,7 +64,7 @@ public class TouchCoordinateMapperTests
         var opts = MappingOptions.ForScreen(1920, 1080);
         var mapper = new TouchCoordinateMapper(opts, Rm2);
 
-        var f = mapper.Map(Frame(Contact(0, 0, pressure: Rm2.Touch.PressureMax)));
+        var f = mapper.Map(Frame(Contact(0, 0, Rm2.Touch.PressureMax)));
 
         Assert.Equal((uint)InjectionScale.PressureMax, f.Contacts[0].Pressure);
     }
@@ -95,7 +100,7 @@ public class TouchCoordinateMapperTests
     [Fact]
     public void MultipleContacts_AllMapped()
     {
-        var opts = MappingOptions.ForScreen(1920, 1080, Orientation.Portrait);
+        var opts = MappingOptions.ForScreen(1920, 1080);
         var mapper = new TouchCoordinateMapper(opts, Rm2);
 
         var f = mapper.Map(Frame(

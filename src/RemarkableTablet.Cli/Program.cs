@@ -6,22 +6,23 @@ using RemarkableTablet.Core.Transport;
 #if WINDOWS_PLATFORM
 using RemarkableTablet.Windows.Interop;
 using RemarkableTablet.Windows.Output;
+
 #elif LINUX_PLATFORM
 using RemarkableTablet.Linux.Output;
 #endif
 
 // ── Parse args ───────────────────────────────────────────────────────────────
-var address     = GetArg(args, "--address",     "10.11.99.1")!;
-var password    = GetArg(args, "--password",    null);
-var keyPath     = GetArg(args, "--key",         null);
+var address = GetArg(args, "--address", "10.11.99.1")!;
+var password = GetArg(args, "--password", null);
+var keyPath = GetArg(args, "--key", null);
 var orientation = GetArg(args, "--orientation", "portrait")!;
-var outputMode  = GetArg(args, "--output",      "ink")!;
-var gestures    = GetArg(args, "--gestures",    "off")!;
-var pressure    = GetArg(args, "--pressure",    "linear")!;
-var deviceArg   = GetArg(args, "--device",      "auto")!;
-var debug       = args.Contains("--debug");
+var outputMode = GetArg(args, "--output", "ink")!;
+var gestures = GetArg(args, "--gestures", "off")!;
+var pressure = GetArg(args, "--pressure", "linear")!;
+var deviceArg = GetArg(args, "--device", "auto")!;
+var debug = args.Contains("--debug");
 
-var widthArg  = ParseInt(GetArg(args, "--width",  null));
+var widthArg = ParseInt(GetArg(args, "--width", null));
 var heightArg = ParseInt(GetArg(args, "--height", null));
 
 if (password is null && keyPath is null)
@@ -46,13 +47,9 @@ int screenW, screenH;
 ScreenMetrics.EnablePerMonitorDpiAwareness();
 
 if (widthArg > 0 && heightArg > 0)
-{
     (screenW, screenH) = (widthArg, heightArg);
-}
 else
-{
     (screenW, screenH) = ScreenMetrics.GetPrimarySize();
-}
 #elif LINUX_PLATFORM
 if (widthArg > 0 && heightArg > 0)
 {
@@ -75,10 +72,10 @@ var connOpts = keyPath is not null
 
 var orient = orientation.ToLowerInvariant() switch
 {
-    "landscape"        => Orientation.Landscape,
-    "portraitflipped"  => Orientation.PortraitFlipped,
+    "landscape" => Orientation.Landscape,
+    "portraitflipped" => Orientation.PortraitFlipped,
     "landscapeflipped" => Orientation.LandscapeFlipped,
-    _                  => Orientation.Portrait
+    _ => Orientation.Portrait
 };
 
 // Resolve the device profile: explicit name → that profile, "auto" → probe
@@ -96,14 +93,14 @@ if (deviceArg.Equals("auto", StringComparison.OrdinalIgnoreCase))
 else
 {
     profile = DeviceDetector.ByName(deviceArg)
-        ?? throw new ArgumentException(
-            $"Unknown --device '{deviceArg}'. Use auto, rm2, or rmpp.");
+              ?? throw new ArgumentException(
+                  $"Unknown --device '{deviceArg}'. Use auto, rm2, or rmpp.");
     Console.WriteLine($"Using profile: {profile.Name}");
 }
 
 var mappingOpts = MappingOptions.ForScreen(screenW, screenH, orient);
-var curve       = PressureCurve.FromName(pressure);
-var mapper      = new CoordinateMapper(mappingOpts, profile, curve);
+var curve = PressureCurve.FromName(pressure);
+var mapper = new CoordinateMapper(mappingOpts, profile, curve);
 
 IOutputMode output;
 #if WINDOWS_PLATFORM
@@ -126,13 +123,9 @@ if (gestures == "touch")
 #endif
 }
 else if (gestures == "synth")
-{
     Console.Error.WriteLine("Warning: --gestures synth is not yet implemented; ignoring.");
-}
 else if (gestures != "off")
-{
     Console.Error.WriteLine($"Warning: unknown --gestures value '{gestures}'; expected touch|synth|off.");
-}
 
 var transport = new SshTransport(connOpts);
 transport.StateChanged += state =>
@@ -187,4 +180,7 @@ static string? GetArg(string[] args, string flag, string? fallback)
     return i >= 0 && i + 1 < args.Length ? args[i + 1] : fallback;
 }
 
-static int ParseInt(string? s) => int.TryParse(s, out var v) ? v : 0;
+static int ParseInt(string? s)
+{
+    return int.TryParse(s, out var v) ? v : 0;
+}

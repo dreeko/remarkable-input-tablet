@@ -36,17 +36,17 @@ public static class ReMarkablePaperProProfile
             // Resolution units are ticks per millimetre per the input_absinfo
             // convention; the rMPP's much higher values vs rM2 (100) reflect
             // the higher-density active digitizer geometry.
-            XMin: 0,    XMax: 11180, XResolution: 2832,
-            YMin: 0,    YMax: 15340, YResolution: 2064,
-            PressureMin: 0, PressureMax: 4096,
+            0, 11180, 2832,
+            0, 15340, 2064,
+            0, 4096,
 
             // TODO(rmpp-phase0): tilt and distance ranges are not in the
             // public rmpro constants. Capture via evtest /dev/input/event2
             // on real hardware. Placeholders assume rM2 conventions
             // (firmware units ±9000 mapped to ±90°, hover 0–255).
-            TiltXMin: -9000, TiltXMax: 9000,
-            TiltYMin: -9000, TiltYMax: 9000,
-            DistanceMin: 0,  DistanceMax: 255),
+            -9000, 9000,
+            -9000, 9000,
+            0, 255),
 
         Touch = new TouchAxes(
             // TODO(rmpp-phase0): touch axis ranges have not been published
@@ -54,10 +54,10 @@ public static class ReMarkablePaperProProfile
             // INPUT_PROP_DIRECT) on the reasonable assumption the panel is
             // display-aligned like the rM2's pt_mt driver. Confirm via
             // evtest /dev/input/event3 and corner-tap calibration.
-            XMin: 0, XMax: 1619,
-            YMin: 0, YMax: 2159,
-            PressureMin: 0, PressureMax: 255,
-            MaxSlots: 32, MaxTracked: 5),
+            0, 1619,
+            0, 2159,
+            0, 255,
+            32, 5),
 
         // TODO(rmpp-phase0): reMarkable markets palm rejection on rMPP but
         // does not specify the mechanism. If touch events flow while the
