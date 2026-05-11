@@ -32,6 +32,17 @@ public sealed class SshTransport : IAsyncDisposable
 
     public async Task ConnectAsync(CancellationToken ct)
     {
+        // Already connected — typically because an upstream probe (e.g.
+        // DeviceDetector) connected first and is handing the transport to
+        // the pipeline. Skip cleanup so we don't tear down the session;
+        // subsequent reconnect-after-EOF paths still take the full
+        // cleanup-and-rebuild route below.
+        if (_client is { IsConnected: true })
+        {
+            StateChanged?.Invoke(ConnectionState.Connected);
+            return;
+        }
+
         await CleanupConnectionAsync();
 
         StateChanged?.Invoke(ConnectionState.Connecting);
@@ -76,13 +87,17 @@ public sealed class SshTransport : IAsyncDisposable
 
     private SshClient BuildClient()
     {
-        if (_opts.PrivateKeyPath is not null)
-        {
-            var key = new PrivateKeyFile(_opts.PrivateKeyPath);
-            return new SshClient(_opts.Host, _opts.Port, _opts.Username, key);
-        }
+        var client = _opts.PrivateKeyPath is not null
+            ? new SshClient(_opts.Host, _opts.Port, _opts.Username, new PrivateKeyFile(_opts.PrivateKeyPath))
+            : new SshClient(_opts.Host, _opts.Port, _opts.Username, _opts.Password ?? "");
 
-        return new SshClient(_opts.Host, _opts.Port, _opts.Username, _opts.Password ?? "");
+        // The SSH.NET default socket-connect timeout is ~30s. When the rM's
+        // USB-Ethernet has a transient hiccup (common on cold-start) this
+        // leaves the user staring at a hung "Connecting…" for half a minute
+        // before the failure is even logged. 15s is short enough to feel
+        // responsive while still tolerating normal handshake variance.
+        client.ConnectionInfo.Timeout = TimeSpan.FromSeconds(15);
+        return client;
     }
 
     private async Task CleanupConnectionAsync()

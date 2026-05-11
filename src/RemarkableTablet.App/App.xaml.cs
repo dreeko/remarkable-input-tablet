@@ -35,6 +35,14 @@ public partial class App : Application
 
     public event Action<ConnectionState>? PipelineStateChanged;
 
+    /// <summary>
+    ///     Raised on the UI thread when StartPipeline fails before reaching
+    ///     the streaming loop — typically a probe timeout or auth failure.
+    ///     Gives SettingsWindow something to display instead of a silent
+    ///     transition to Disconnected.
+    /// </summary>
+    public event Action<string>? ConnectionErrorOccurred;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -79,10 +87,31 @@ public partial class App : Application
     private async Task StartPipelineAsync(ConnectionOptions connOpts, MappingOptions mappingOpts,
         string outputMode, bool gestures, string? pressureCurve, string device)
     {
+        SshTransport? transport = null;
+        var transferred = false;
         try
         {
-            var profile = await ResolveProfileAsync(connOpts, device);
-            WriteLog($"Using profile: {profile.Name}");
+            // Resolve the profile. For "auto", we connect once for the probe
+            // and then hand the same SshTransport to the pipeline — its first
+            // ConnectAsync is a no-op (idempotent on already-connected
+            // clients), which avoids paying for two SSH handshakes back-to-
+            // back and halves the chance of a transient USB-Ethernet flake
+            // stalling startup. For explicit rm2/rmpp the pipeline does its
+            // own connect on the empty transport, same as before.
+            transport = new SshTransport(connOpts);
+
+            DeviceProfile profile;
+            var named = DeviceDetector.ByName(device);
+            if (named is not null)
+            {
+                profile = named;
+            }
+            else
+            {
+                await transport.ConnectAsync(CancellationToken.None);
+                profile = await DeviceDetector.DetectAsync(transport, CancellationToken.None);
+                WriteLog($"Detected: {profile.Name}");
+            }
 
             var mapper = new CoordinateMapper(mappingOpts, profile, PressureCurve.FromName(pressureCurve));
             var output = outputMode == OutputModes.Mouse
@@ -97,32 +126,32 @@ public partial class App : Application
                 touchOutput = new WindowsTouchInjectionOutput(profile.Touch.MaxTracked);
             }
 
-            var transport = new SshTransport(connOpts);
             var pipeline = new TabletPipeline(transport, profile, mapper, output, touchMapper, touchOutput);
             pipeline.ConnectionStateChanged += OnPipelineStateChanged;
             pipeline.Error += ex => WriteLog($"Pipeline error: {ex}");
 
             _pipeline = pipeline;
+            transferred = true; // pipeline owns the transport from here
             await RunPipelineAsync(pipeline);
         }
         catch (Exception ex)
         {
             WriteLog($"StartPipeline failed: {ex}");
+            if (!transferred && transport is not null)
+            {
+                try { await transport.DisposeAsync(); } catch { /* best-effort */ }
+            }
             _pipeline = null;
-            await Dispatcher.BeginInvoke(() => PipelineStateChanged?.Invoke(ConnectionState.Disconnected));
+            var msg = ex.Message;
+            await Dispatcher.BeginInvoke(() =>
+            {
+                // Order matters: fire Disconnected first so the SettingsWindow
+                // updates its status text, then fire the error so the more
+                // useful message overwrites the generic "Disconnected." line.
+                PipelineStateChanged?.Invoke(ConnectionState.Disconnected);
+                ConnectionErrorOccurred?.Invoke(msg);
+            });
         }
-    }
-
-    private static async Task<DeviceProfile> ResolveProfileAsync(ConnectionOptions connOpts, string device)
-    {
-        var named = DeviceDetector.ByName(device);
-        if (named is not null) return named;
-
-        // "auto" or unknown — probe over a short-lived SSH session. The
-        // streaming pipeline opens its own session afterwards.
-        await using var probe = new SshTransport(connOpts);
-        await probe.ConnectAsync(CancellationToken.None);
-        return await DeviceDetector.DetectAsync(probe, CancellationToken.None);
     }
 
     public void StopPipeline()

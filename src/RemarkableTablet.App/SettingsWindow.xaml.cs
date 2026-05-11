@@ -23,7 +23,12 @@ public partial class SettingsWindow : Window
         LoadSettings();
 
         AppInstance.PipelineStateChanged += OnPipelineStateChanged;
-        Closed += (_, _) => AppInstance.PipelineStateChanged -= OnPipelineStateChanged;
+        AppInstance.ConnectionErrorOccurred += OnConnectionError;
+        Closed += (_, _) =>
+        {
+            AppInstance.PipelineStateChanged -= OnPipelineStateChanged;
+            AppInstance.ConnectionErrorOccurred -= OnConnectionError;
+        };
 
         // AutoConnect: when set, pressing Enter in the password box triggers Connect.
         if (_autoConnect)
@@ -228,6 +233,11 @@ public partial class SettingsWindow : Window
                 _ => state.ToString()
             });
         });
+    }
+
+    private void OnConnectionError(string message)
+    {
+        Dispatcher.BeginInvoke(() => SetStatus($"Connection failed: {message}", true));
     }
 
     private void SetStatus(string msg, bool isError = false)
