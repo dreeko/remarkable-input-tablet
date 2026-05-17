@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
+    <!-- Allow the Windows-targeted projects (net10.0-windows, WPF, WinForms)
+         to restore and build on Linux/macOS. The produced assemblies cannot
+         run on the host OS, but Core / Linux / cross-platform projects in the
+         same solution build cleanly. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+</Project>
