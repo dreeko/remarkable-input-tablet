@@ -1,3 +1,5 @@
+using System.Net.Sockets;
+using Renci.SshNet.Common;
 using RemarkableTablet.Core.Devices;
 using RemarkableTablet.Core.Mapping;
 using RemarkableTablet.Core.Output;
@@ -85,10 +87,17 @@ DeviceProfile profile;
 if (deviceArg.Equals("auto", StringComparison.OrdinalIgnoreCase))
 {
     Console.WriteLine($"Detecting device at {address}...");
-    await using var probeTransport = new SshTransport(connOpts);
-    await probeTransport.ConnectAsync(CancellationToken.None);
-    profile = await DeviceDetector.DetectAsync(probeTransport, CancellationToken.None);
-    Console.WriteLine($"Detected: {profile.Name}");
+    try
+    {
+        await using var probeTransport = new SshTransport(connOpts);
+        await probeTransport.ConnectAsync(CancellationToken.None);
+        profile = await DeviceDetector.DetectAsync(probeTransport, CancellationToken.None);
+        Console.WriteLine($"Detected: {profile.Name}");
+    }
+    catch (Exception ex)
+    {
+        return ReportFatal(ex, debug);
+    }
 }
 else
 {
@@ -165,10 +174,7 @@ try
 }
 catch (Exception ex)
 {
-    Console.ForegroundColor = ConsoleColor.Red;
-    Console.Error.WriteLine($"Fatal: {ex.Message}");
-    Console.ResetColor();
-    return 1;
+    return ReportFatal(ex, debug);
 }
 
 return 0;
@@ -183,4 +189,68 @@ static string? GetArg(string[] args, string flag, string? fallback)
 static int ParseInt(string? s)
 {
     return int.TryParse(s, out var v) ? v : 0;
+}
+
+static int ReportFatal(Exception ex, bool debug)
+{
+    var (message, hint) = ClassifyFatal(ex);
+
+    Console.ForegroundColor = ConsoleColor.Red;
+    Console.Error.WriteLine($"Error: {message}");
+    Console.ResetColor();
+
+    if (hint is not null)
+    {
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.Error.WriteLine($"Hint:  {hint}");
+        Console.ResetColor();
+    }
+
+    if (debug)
+    {
+        Console.Error.WriteLine();
+        Console.Error.WriteLine("--- debug stack ---");
+        Console.Error.WriteLine(ex.ToString());
+    }
+
+    return 1;
+}
+
+static (string Message, string? Hint) ClassifyFatal(Exception root)
+{
+    // SSH.NET wraps socket errors in SshConnectionException; AggregateException
+    // wraps task faults. Walk to the most informative layer before classifying.
+    var ex = root;
+    while (ex.InnerException is not null && ex is not SocketException && ex is not SshException)
+        ex = ex.InnerException;
+
+    return ex switch
+    {
+        SocketException { SocketErrorCode: SocketError.HostUnreachable } =>
+            ("No route to host. The reMarkable is not reachable.",
+                "Confirm USB-Ethernet or Wi-Fi is up and that `ping <address>` succeeds."),
+        SocketException { SocketErrorCode: SocketError.NetworkUnreachable } =>
+            ("Network unreachable.",
+                "The USB-Ethernet interface may be down — re-plug the device."),
+        SocketException { SocketErrorCode: SocketError.TimedOut } =>
+            ("Connection timed out.",
+                "The reMarkable may be asleep — tap the screen to wake it."),
+        SocketException { SocketErrorCode: SocketError.ConnectionRefused } =>
+            ("Connection refused.",
+                "SSH is not enabled on the device. Turn on developer mode in Settings."),
+        SocketException { SocketErrorCode: SocketError.HostNotFound } =>
+            ("Host not found.",
+                "Check the --address value."),
+        SocketException se =>
+            ($"Network error: {se.Message} ({se.SocketErrorCode}).", null),
+        SshAuthenticationException =>
+            ("SSH authentication failed.",
+                "Wrong --password or --key. The root password is on the device under Settings → Help → Copyrights and licenses → 'GPLv3 Compliance'."),
+        SshOperationTimeoutException =>
+            ("SSH handshake timed out.",
+                "The device is reachable but did not respond to SSH in time."),
+        SshConnectionException sce =>
+            ($"SSH connection failed: {sce.Message}.", null),
+        _ => (root.Message, null)
+    };
 }
