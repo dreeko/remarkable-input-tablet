@@ -47,6 +47,16 @@ public class CoordinateMapperTests
     }
 
     [Fact]
+    public void PortraitOppositeCorner_MapsInsideFinalScreenPixel()
+    {
+        var mapped = MakeMapper(Orientation.Portrait)
+            .Map(MakeFrame(Rm2.Pen.XMax, 0));
+
+        Assert.Equal(1919, mapped.ScreenX);
+        Assert.Equal(1079, mapped.ScreenY);
+    }
+
+    [Fact]
     public void PortraitCenter_MapsToScreenCenter()
     {
         var mapper = MakeMapper(Orientation.Portrait);

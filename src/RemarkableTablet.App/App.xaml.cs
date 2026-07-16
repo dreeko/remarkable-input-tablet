@@ -18,6 +18,7 @@ public partial class App : Application
         "remarkable-input-tablet", "app.log");
 
     private TabletPipeline? _pipeline;
+    private bool _pipelineStarting;
     private TrayIcon? _trayIcon;
 
     public App()
@@ -32,6 +33,7 @@ public partial class App : Application
     }
 
     public bool IsConnected => _pipeline is not null;
+    public bool IsConnecting => _pipelineStarting;
 
     public event Action<ConnectionState>? PipelineStateChanged;
 
@@ -80,7 +82,10 @@ public partial class App : Application
     public void StartPipeline(ConnectionOptions connOpts, MappingOptions mappingOpts, string outputMode,
         bool gestures = false, string? pressureCurve = null, string device = "auto")
     {
-        if (_pipeline is not null) return;
+        if (_pipeline is not null || _pipelineStarting) return;
+        // Set this before the async method reaches its first await so repeated
+        // Connect clicks during device probing cannot start parallel pipelines.
+        _pipelineStarting = true;
         _ = StartPipelineAsync(connOpts, mappingOpts, outputMode, gestures, pressureCurve, device);
     }
 
@@ -140,6 +145,7 @@ public partial class App : Application
             };
 
             _pipeline = pipeline;
+            _pipelineStarting = false;
             transferred = true; // pipeline owns the transport from here
             await RunPipelineAsync(pipeline);
         }
@@ -151,6 +157,7 @@ public partial class App : Application
                 try { await transport.DisposeAsync(); } catch { /* best-effort */ }
             }
             _pipeline = null;
+            _pipelineStarting = false;
             var msg = ex.Message;
             await Dispatcher.BeginInvoke(() =>
             {

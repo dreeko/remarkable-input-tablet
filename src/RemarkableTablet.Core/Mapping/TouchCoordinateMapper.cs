@@ -60,8 +60,8 @@ public sealed class TouchCoordinateMapper
         rx = Math.Clamp(rx, 0.0, 1.0);
         ry = Math.Clamp(ry, 0.0, 1.0);
 
-        var sx = _opts.MonitorX + (int)(rx * _opts.MonitorW);
-        var sy = _opts.MonitorY + (int)(ry * _opts.MonitorH);
+        var sx = _opts.MonitorX + (int)(rx * Math.Max(0, _opts.MonitorW - 1));
+        var sy = _opts.MonitorY + (int)(ry * Math.Max(0, _opts.MonitorH - 1));
 
         // Pressure: device raw → 0..1024 (Windows Ink scale).
         var pressureNorm = c.Pressure / (double)_profile.Touch.PressureMax;

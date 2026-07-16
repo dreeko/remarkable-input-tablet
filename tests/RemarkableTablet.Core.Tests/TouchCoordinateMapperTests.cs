@@ -42,9 +42,8 @@ public class TouchCoordinateMapperTests
             Rm2.Touch.XMax,
             Rm2.Touch.YMax)));
 
-        // (int) truncation of 0.999... can land just below max — accept ±1.
-        Assert.InRange(f.Contacts[0].ScreenX, 1918, 1920);
-        Assert.InRange(f.Contacts[0].ScreenY, 1078, 1080);
+        Assert.Equal(1919, f.Contacts[0].ScreenX);
+        Assert.Equal(1079, f.Contacts[0].ScreenY);
     }
 
     [Fact]

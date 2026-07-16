@@ -175,7 +175,7 @@ public class TouchStateMachineTests
     }
 
     [Fact]
-    public async Task ContactsOrderedBySlotAscending()
+    public async Task SparseHardwareSlots_AreMappedToStableDenseOutputSlots()
     {
         var frames = await RunFrames(
             // Land slot 5 first.
@@ -195,8 +195,25 @@ public class TouchStateMachineTests
 
         var f = Assert.Single(frames);
         Assert.Equal(3, f.Contacts.Count);
-        Assert.Equal(2, f.Contacts[0].Slot);
-        Assert.Equal(5, f.Contacts[1].Slot);
-        Assert.Equal(7, f.Contacts[2].Slot);
+        Assert.Equal([0, 1, 2], f.Contacts.Select(c => c.Slot));
+        Assert.Equal([1, 2, 3], f.Contacts.Select(c => c.X));
+    }
+
+    [Fact]
+    public async Task DenseOutputSlot_IsReusedAfterSparseContactReleases()
+    {
+        var frames = await RunFrames(
+            Abs(EvdevCodes.ABS_MT_SLOT, 20),
+            Abs(EvdevCodes.ABS_MT_TRACKING_ID, 100),
+            Syn(),
+            Abs(EvdevCodes.ABS_MT_TRACKING_ID, -1),
+            Syn(),
+            Abs(EvdevCodes.ABS_MT_SLOT, 31),
+            Abs(EvdevCodes.ABS_MT_TRACKING_ID, 200),
+            Syn());
+
+        Assert.Equal(0, frames[0].Contacts[0].Slot);
+        Assert.Empty(frames[1].Contacts);
+        Assert.Equal(0, frames[2].Contacts[0].Slot);
     }
 }

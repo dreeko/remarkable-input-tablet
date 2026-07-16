@@ -10,10 +10,30 @@ using RemarkableTablet.Windows.Interop;
 using RemarkableTablet.Windows.Output;
 
 #elif LINUX_PLATFORM
+using RemarkableTablet.Linux.Display;
 using RemarkableTablet.Linux.Output;
 #endif
 
 // ── Parse args ───────────────────────────────────────────────────────────────
+if (args.Contains("--help") || args.Contains("-h"))
+{
+    PrintUsage(Console.Out);
+    return 0;
+}
+
+if (args.Contains("--version"))
+{
+    Console.WriteLine(typeof(TabletPipeline).Assembly.GetName().Version?.ToString(3) ?? "unknown");
+    return 0;
+}
+
+if (ValidateArgs(args) is { } argumentError)
+{
+    Console.Error.WriteLine($"Error: {argumentError}");
+    Console.Error.WriteLine("Run 'remtablet --help' for usage.");
+    return 2;
+}
+
 var address = GetArg(args, "--address", "10.11.99.1")!;
 var password = GetArg(args, "--password", null);
 var keyPath = GetArg(args, "--key", null);
@@ -30,15 +50,8 @@ var heightArg = ParseInt(GetArg(args, "--height", null));
 if (password is null && keyPath is null)
 {
     await Console.Error.WriteLineAsync("Error: provide --password <pw> or --key <path>");
-    await Console.Error.WriteLineAsync();
-    await Console.Error.WriteLineAsync("Usage:");
-#if WINDOWS_PLATFORM
-    await Console.Error.WriteLineAsync("  remtablet --password <pw> [--address <ip>] [--device auto|rm2|rmpp] [--orientation portrait|landscape] [--output ink|mouse] [--pressure linear|soft|hard] [--gestures touch|off] [--width <px>] [--height <px>] [--debug]");
-#else
-    await Console.Error.WriteLineAsync("  remtablet --password <pw> [--address <ip>] [--device auto|rm2|rmpp] [--orientation portrait|landscape] [--pressure linear|soft|hard] [--gestures touch|off] [--width <px>] [--height <px>] [--debug]");
-#endif
-    await Console.Error.WriteLineAsync("  remtablet --key <path/to/id_rsa> [--address <ip>]");
-    return 1;
+    await Console.Error.WriteLineAsync("Run 'remtablet --help' for usage.");
+    return 2;
 }
 
 // ── Resolve screen dimensions ─────────────────────────────────────────────────
@@ -59,9 +72,18 @@ if (widthArg > 0 && heightArg > 0)
 }
 else
 {
-    Console.Error.WriteLine("Warning: --width/--height not specified; defaulting to 1920×1080.");
-    Console.Error.WriteLine("Pass --width <px> --height <px> to match your display resolution.");
-    (screenW, screenH) = (1920, 1080);
+    var detected = LinuxScreenDetector.Detect();
+    if (detected is { } screen)
+    {
+        (screenW, screenH) = (screen.Width, screen.Height);
+        Console.WriteLine($"Detected Linux display: {screenW}×{screenH} ({screen.Source}).");
+    }
+    else
+    {
+        Console.Error.WriteLine("Warning: display detection failed; defaulting to 1920×1080.");
+        Console.Error.WriteLine("Pass --width <px> --height <px> to set it explicitly.");
+        (screenW, screenH) = (1920, 1080);
+    }
 }
 #else
 #error Unsupported platform — add WINDOWS_PLATFORM or LINUX_PLATFORM to DefineConstants
@@ -189,6 +211,114 @@ static string? GetArg(string[] args, string flag, string? fallback)
 static int ParseInt(string? s)
 {
     return int.TryParse(s, out var v) ? v : 0;
+}
+
+static string? ValidateArgs(string[] values)
+{
+    var valueFlags = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "--address", "--password", "--key", "--orientation", "--output",
+        "--gestures", "--pressure", "--device", "--width", "--height"
+    };
+    var switchFlags = new HashSet<string>(StringComparer.Ordinal) { "--debug" };
+    var seen = new HashSet<string>(StringComparer.Ordinal);
+
+    for (var i = 0; i < values.Length; i++)
+    {
+        var token = values[i];
+        if (!valueFlags.Contains(token) && !switchFlags.Contains(token))
+            return token.StartsWith('-')
+                ? $"unknown option '{token}'."
+                : $"unexpected positional argument '{token}'.";
+        if (!seen.Add(token))
+            return $"option '{token}' was specified more than once.";
+        if (!valueFlags.Contains(token)) continue;
+        if (i + 1 >= values.Length || values[i + 1].StartsWith('-'))
+            return $"option '{token}' requires a value.";
+        i++;
+    }
+
+    if (seen.Contains("--password") && seen.Contains("--key"))
+        return "--password and --key are mutually exclusive.";
+
+    if (string.IsNullOrWhiteSpace(GetArg(values, "--address", "10.11.99.1")))
+        return "--address cannot be empty.";
+
+    var orientationValue = GetArg(values, "--orientation", "portrait")!;
+    if (!OneOf(orientationValue, "portrait", "landscape", "portraitflipped", "landscapeflipped"))
+        return $"invalid --orientation '{orientationValue}'; expected portrait, landscape, portraitflipped, or landscapeflipped.";
+
+    var pressureValue = GetArg(values, "--pressure", "linear")!;
+    if (!OneOf(pressureValue, "linear", "soft", "hard"))
+        return $"invalid --pressure '{pressureValue}'; expected linear, soft, or hard.";
+
+    var gesturesValue = GetArg(values, "--gestures", "off")!;
+    if (!OneOf(gesturesValue, "off", "touch"))
+        return $"invalid --gestures '{gesturesValue}'; expected off or touch.";
+
+    var deviceValue = GetArg(values, "--device", "auto")!;
+    if (!OneOf(deviceValue, "auto", "rm2", "rmpp"))
+        return $"invalid --device '{deviceValue}'; expected auto, rm2, or rmpp.";
+
+    var outputValue = GetArg(values, "--output", "ink")!;
+#if WINDOWS_PLATFORM
+    if (!OneOf(outputValue, "ink", "mouse"))
+        return $"invalid --output '{outputValue}'; expected ink or mouse.";
+#else
+    if (!OneOf(outputValue, "ink"))
+        return $"invalid --output '{outputValue}'; Linux supports only ink.";
+#endif
+
+    var hasWidth = seen.Contains("--width");
+    var hasHeight = seen.Contains("--height");
+    if (hasWidth != hasHeight)
+        return "--width and --height must be specified together.";
+    if (hasWidth && (!int.TryParse(GetArg(values, "--width", null), out var width) || width <= 0))
+        return "--width must be a positive integer.";
+    if (hasHeight && (!int.TryParse(GetArg(values, "--height", null), out var height) || height <= 0))
+        return "--height must be a positive integer.";
+
+    var key = GetArg(values, "--key", null);
+    if (key is not null && !File.Exists(key))
+        return $"SSH key file '{key}' does not exist.";
+
+    return null;
+}
+
+static bool OneOf(string value, params string[] allowed)
+{
+    return allowed.Contains(value, StringComparer.OrdinalIgnoreCase);
+}
+
+static void PrintUsage(TextWriter writer)
+{
+    writer.WriteLine("Use a reMarkable tablet as a native pen input device.");
+    writer.WriteLine();
+    writer.WriteLine("Usage:");
+    writer.WriteLine("  remtablet (--password <pw> | --key <path>) [options]");
+    writer.WriteLine();
+    writer.WriteLine("Connection:");
+    writer.WriteLine("  --address <host>       Tablet address (default: 10.11.99.1)");
+    writer.WriteLine("  --password <pw>        Tablet root password");
+    writer.WriteLine("  --key <path>           SSH private key file");
+    writer.WriteLine("  --device <value>       auto, rm2, or rmpp (default: auto)");
+    writer.WriteLine();
+    writer.WriteLine("Mapping:");
+    writer.WriteLine("  --orientation <value>  portrait, landscape, portraitflipped, or landscapeflipped");
+    writer.WriteLine("  --pressure <value>     linear, soft, or hard (default: linear)");
+    writer.WriteLine("  --gestures <value>     off or touch (default: off)");
+    writer.WriteLine("  --width <px>           Override detected screen width; requires --height");
+    writer.WriteLine("  --height <px>          Override detected screen height; requires --width");
+#if WINDOWS_PLATFORM
+    writer.WriteLine("  --output <value>       ink or mouse (default: ink)");
+#else
+    writer.WriteLine("  --output <value>       ink (default: ink)");
+#endif
+    writer.WriteLine();
+    writer.WriteLine("Other:");
+    writer.WriteLine("  --debug                 Print pipeline details and fatal stack traces");
+    writer.WriteLine("  -h, --help              Show this help");
+    writer.WriteLine("  --version               Show version");
 }
 
 static int ReportFatal(Exception ex, bool debug)

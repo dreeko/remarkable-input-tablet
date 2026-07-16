@@ -124,9 +124,9 @@ public partial class SettingsWindow : Window
 
     private void Connect_Click(object sender, RoutedEventArgs e)
     {
-        if (AppInstance.IsConnected)
+        if (AppInstance.IsConnected || AppInstance.IsConnecting)
         {
-            SetStatus("Already connected.");
+            SetStatus(AppInstance.IsConnected ? "Already connected." : "Already connecting…");
             return;
         }
 

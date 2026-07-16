@@ -56,9 +56,16 @@ public sealed class TabletStateMachine
             output.TryWrite(Snapshot());
         else if (code == EvdevCodes.SYN_DROPPED)
         {
-            // Kernel dropped events — state is unknown; emit pen-up then reset
+            // Kernel dropped events — every key state is unknown. Clear all
+            // tool/button state before emitting a definitive out-of-range
+            // frame so no eraser or barrel button can remain stuck downstream.
             _isTouch = false;
+            _isPen = false;
+            _isEraser = false;
+            _barrel1 = false;
+            _barrel2 = false;
             _pressure = 0;
+            _distance = 0;
             output.TryWrite(Snapshot());
         }
     }

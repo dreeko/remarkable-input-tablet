@@ -50,8 +50,8 @@ public sealed class CoordinateMapper
         ry = Math.Clamp(ry, 0.0, 1.0);
 
         // Map to screen pixels
-        var sx = _opts.MonitorX + (int)(rx * _opts.MonitorW);
-        var sy = _opts.MonitorY + (int)(ry * _opts.MonitorH);
+        var sx = _opts.MonitorX + (int)(rx * Math.Max(0, _opts.MonitorW - 1));
+        var sy = _opts.MonitorY + (int)(ry * Math.Max(0, _opts.MonitorH - 1));
 
         // Pressure: tablet raw → normalised → curve → Windows 0–1024
         var normPressure = frame.Pressure / (double)_profile.Pen.PressureMax;

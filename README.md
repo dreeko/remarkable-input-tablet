@@ -1,6 +1,6 @@
 # remarkable-input-tablet
 
-Use a reMarkable 2 (stable) or reMarkable Paper Pro (experimental — see [Paper Pro status](#paper-pro-status)) as a pressure-sensitive drawing tablet on Windows and Linux. No drivers, no root modifications, no third-party services.
+Use a reMarkable 2 (stable) or reMarkable Paper Pro (experimental — see [Paper Pro status](#paper-pro-status)) as a pressure-sensitive drawing tablet on Windows and Linux. Nothing is installed on the tablet: the host reads its existing Linux input devices over SSH and creates native pointer devices locally.
 
 The tablet connects over SSH (USB or Wi-Fi). The pen's raw evdev events are streamed to the PC and injected as native pointer input, giving you full pressure sensitivity, tilt, hover detection, and eraser support in any compatible application. Optional multi-touch gestures (pinch / pan / rotate) inject as real touch contacts to apps that consume them.
 
@@ -8,8 +8,8 @@ The tablet connects over SSH (USB or Wi-Fi). The pen's raw evdev events are stre
 
 ### Tablet — reMarkable 2
 
-- Firmware tested: Wacom I2C Digitizer, version 1231
-- Root password: Settings → Help → Copyrights and licenses → scroll to bottom
+- Firmware/hardware tested: Wacom I2C Digitizer, version 1231
+- SSH enabled and the tablet's root password or an SSH private key. The password is shown under Settings → Help → Copyrights and licenses → GPLv3 Compliance.
 
 ### Tablet — reMarkable Paper Pro
 
@@ -23,7 +23,7 @@ The tablet connects over SSH (USB or Wi-Fi). The pen's raw evdev events are stre
 
 ### Host — Linux
 
-- Any x86-64 Linux with kernel 4.5+ (uinput module)
+- x86-64 Linux with kernel 4.5+ and the `uinput` module (the published archive targets `linux-x64`)
 - Connection: USB cable or Wi-Fi (same as Windows)
 - Permissions: membership in the `input` group (one-time setup, see below)
 
@@ -57,7 +57,7 @@ sudo usermod -aG input $USER
 ./remtablet --password <root-password>
 ```
 
-If your display resolution is not 1920×1080, pass it explicitly:
+The Linux CLI detects the current display size using `xrandr`, `kscreen-doctor`, `wlr-randr`, or DRM sysfs. If detection fails, it warns and falls back to 1920×1080. Override detection when it chooses the wrong output or desktop extent:
 
 ```bash
 ./remtablet --password <root-password> --width 2560 --height 1440
@@ -65,21 +65,27 @@ If your display resolution is not 1920×1080, pass it explicitly:
 
 Press **Ctrl-C** to stop.
 
+For unattended use, prefer `--key ~/.ssh/id_ed25519` over putting a password in shell history or a process command line. Run `remtablet --help` for built-in usage information and `remtablet --version` for the installed version.
+
 ## CLI options
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--password <pw>` | — | Root password (required unless `--key` is set) |
 | `--key <path>` | — | Path to SSH private key file |
-| `--address <ip>` | `10.11.99.1` | Device IP address |
+| `--address <host>` | `10.11.99.1` | Device IP address or hostname |
 | `--orientation <value>` | `portrait` | `portrait`, `landscape`, `portraitflipped`, `landscapeflipped` |
 | `--output <value>` | `ink` | `ink` (full pressure+tilt) or `mouse` (cursor only, Windows only) |
-| `--width <px>` | auto (Windows) / 1920 (Linux) | Screen width in pixels |
-| `--height <px>` | auto (Windows) / 1080 (Linux) | Screen height in pixels |
+| `--width <px>` | auto | Positive screen width in pixels; must be used with `--height` |
+| `--height <px>` | auto | Positive screen height in pixels; must be used with `--width` |
 | `--debug` | off | Print pipeline stage info on startup |
 | `--gestures <value>` | `off` | `touch` (inject multi-touch contacts for pinch / pan / rotate) or `off`. The rM2 firmware suppresses touch while the pen is in proximity, so two-finger gestures only register when the pen is set aside. |
 | `--pressure <value>` | `linear` | Pressure response curve. `linear` (1:1), `soft` (boosts light strokes — pen feels lighter), or `hard` (suppresses light strokes — pen feels stiffer). |
 | `--device <value>` | `auto` | `auto` (probe via `uname -m`), `rm2`, or `rmpp`. Auto-detect runs a short SSH command before the streaming pipeline starts; force a specific profile only if detection fails. |
+| `-h`, `--help` | — | Print usage and exit |
+| `--version` | — | Print the version and exit |
+
+Option names are case-sensitive; enumerated values are case-insensitive. Unknown, duplicate, incomplete, and conflicting options are rejected before connecting. `--output mouse` is available only in the Windows CLI.
 
 ## Orientation
 
@@ -136,7 +142,7 @@ The virtual device appears as a standard pen tablet to any app that reads from t
 
 The device uses `INPUT_PROP_DIRECT` so absolute coordinates map 1:1 to screen pixels. Pressure is reported on the 0–1024 scale.
 
-### Touch gestures (`--gestures touch`)
+### Touch gesture compatibility (`--gestures touch`)
 
 Pinch / pan / rotate compatibility depends on whether the host application
 consumes Windows touch (or Linux multi-touch) gestures. Confirmed working
@@ -174,6 +180,17 @@ echo 'KERNEL=="uinput", GROUP="input", MODE="0660"' \
 sudo udevadm control --reload && sudo udevadm trigger
 ```
 
+Ensure the module is loaded with `sudo modprobe uinput`. Group membership changes require a new login session; verify access with `test -w /dev/uinput`. Some distributions recreate `/dev/uinput` with their own permissions, in which case use the udev rule rather than a one-off `chmod`.
+
+## Troubleshooting
+
+- **Connection refused or timed out:** confirm SSH is enabled, reconnect USB, and test `ssh root@10.11.99.1`. For Wi-Fi, pass the tablet's current address with `--address`.
+- **Authentication failed:** verify the root password on the tablet, or confirm the private key path and permissions. `--password` and `--key` cannot be combined.
+- **Linux reports `/dev/uinput` access denied:** follow [Linux uinput setup](#linux-uinput-setup), start a new login session, and check `test -w /dev/uinput`.
+- **Pointer mapping is scaled or offset on Linux:** pass the intended output's pixel dimensions with both `--width` and `--height`. This is especially useful for mixed-DPI and multi-monitor desktops.
+- **No touch gestures while drawing:** this is expected on rM2 hardware; move the pen out of proximity before touching the screen.
+- **Unexpected disconnects:** rerun with `--debug` for pipeline details. Normal SSH drops reconnect automatically as described below.
+
 ## Settings persistence
 
 The GUI app (Windows) saves settings to:
@@ -193,7 +210,7 @@ The pipeline reconnects automatically if the SSH stream drops (USB unplugged, de
 Requires [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
 ```bash
-git clone <repo>
+git clone https://github.com/dreeko/remarkable-input-tablet.git
 cd remarkable-input-tablet
 ```
 
@@ -278,12 +295,13 @@ reMarkable 2                         Host PC
 
 | Project | Platform | Role |
 |---------|----------|------|
-| `RemarkableTablet.Core` | Any | Platform-agnostic pipeline: evdev parser, state machines (pen + touch), coordinate mappers, gesture engine, multi-stream SSH transport |
+| `RemarkableTablet.Core` | Any | Platform-agnostic pipeline: evdev parser, pen/touch state machines, coordinate mappers, device profiles, and multi-stream SSH transport |
 | `RemarkableTablet.Windows` | Windows | Win32 P/Invoke layer: Windows Ink pen injection, mouse output, synthetic touch injection (`PT_TOUCH`) |
-| `RemarkableTablet.Linux` | Linux | uinput P/Invoke layer: virtual pen tablet + virtual MT-B multi-touch device |
+| `RemarkableTablet.Linux` | Linux | uinput P/Invoke layer for virtual pen/touch devices, plus host display-size detection |
 | `RemarkableTablet.Cli` | Windows + Linux | `remtablet` — headless CLI, NativeAOT |
 | `RemarkableTablet.App` | Windows | `RemarkableTablet.App.exe` — system tray GUI, WPF + WinForms |
 | `tools/EventDiagnostics` | Windows | Live evdev event stream logger — streams events to console for debugging |
+| `tools/LinuxInjectionSmoke` | Linux | Creates temporary virtual pen/touch devices and injects a short smoke-test sequence |
 
 ## Paper Pro status
 

@@ -76,6 +76,25 @@ public class TabletStateMachineTests
     }
 
     [Fact]
+    public async Task SynDropped_ClearsToolEraserAndBarrelState()
+    {
+        var frames = await RunFrames(
+            new EvdevEvent(EvdevTypes.EV_KEY, EvdevCodes.BTN_TOOL_RUBBER, 1),
+            new EvdevEvent(EvdevTypes.EV_KEY, EvdevCodes.BTN_STYLUS, 1),
+            new EvdevEvent(EvdevTypes.EV_KEY, EvdevCodes.BTN_STYLUS2, 1),
+            new EvdevEvent(EvdevTypes.EV_KEY, EvdevCodes.BTN_TOUCH, 1),
+            new EvdevEvent(EvdevTypes.EV_SYN, EvdevCodes.SYN_REPORT, 0),
+            new EvdevEvent(EvdevTypes.EV_SYN, EvdevCodes.SYN_DROPPED, 0));
+
+        var recovered = frames[1];
+        Assert.False(recovered.InRange);
+        Assert.False(recovered.IsEraser);
+        Assert.False(recovered.IsTouch);
+        Assert.False(recovered.BarrelButton1);
+        Assert.False(recovered.BarrelButton2);
+    }
+
+    [Fact]
     public async Task AccumulatesMultipleAbsEventsPerFrame()
     {
         var frames = await RunFrames(

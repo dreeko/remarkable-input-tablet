@@ -15,5 +15,6 @@
     </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="..\..\src\RemarkableTablet.Core\RemarkableTablet.Core.csproj"/>
+        <ProjectReference Include="..\..\src\RemarkableTablet.Linux\RemarkableTablet.Linux.csproj"/>
     </ItemGroup>
 </Project>

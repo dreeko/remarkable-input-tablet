@@ -18,6 +18,7 @@ public sealed class TouchStateMachine
     // costs less than a fixed-size array of nullable structs and degrades
     // gracefully if a future firmware expands the slot range.
     private readonly Dictionary<int, MutableContact> _slots = new();
+    private readonly HashSet<int> _assignedOutputSlots = new();
     private int _currentSlot;
 
     public static async Task RunAsync(
@@ -61,6 +62,7 @@ public sealed class TouchStateMachine
             // Kernel ring overflow: release everything and emit empty so
             // downstream sees a clean "no contacts" state.
             _slots.Clear();
+            _assignedOutputSlots.Clear();
             output.TryWrite(TouchFrame.Empty);
         }
     }
@@ -75,9 +77,17 @@ public sealed class TouchStateMachine
 
             case EvdevCodes.ABS_MT_TRACKING_ID:
                 if (value < 0)
-                    _slots.Remove(_currentSlot);
+                {
+                    if (_slots.Remove(_currentSlot, out var released) && released.OutputSlot >= 0)
+                        _assignedOutputSlots.Remove(released.OutputSlot);
+                }
                 else
-                    EnsureSlot().TrackingId = value;
+                {
+                    var contact = EnsureSlot();
+                    contact.TrackingId = value;
+                    if (contact.OutputSlot < 0)
+                        contact.OutputSlot = AllocateOutputSlot();
+                }
                 break;
 
             case EvdevCodes.ABS_MT_POSITION_X:
@@ -114,11 +124,22 @@ public sealed class TouchStateMachine
     {
         if (!_slots.TryGetValue(_currentSlot, out var c))
         {
-            c = new MutableContact { Slot = _currentSlot, TrackingId = -1 };
+            c = new MutableContact { TrackingId = -1, OutputSlot = -1 };
             _slots[_currentSlot] = c;
         }
 
         return c;
+    }
+
+    // Hardware MT-B slot identifiers are sparse (0..31 on rM2), while the
+    // synthetic devices expose MaxTracked dense slots (normally 0..4). Keep a
+    // stable dense assignment for the lifetime of each contact.
+    private int AllocateOutputSlot()
+    {
+        var slot = 0;
+        while (_assignedOutputSlots.Contains(slot)) slot++;
+        _assignedOutputSlots.Add(slot);
+        return slot;
     }
 
     private TouchFrame Snapshot()
@@ -134,7 +155,7 @@ public sealed class TouchStateMachine
             var c = kv.Value;
             if (c.TrackingId < 0) continue;
             contacts.Add(new TouchContact(
-                c.Slot, c.TrackingId, c.X, c.Y, c.Pressure,
+                c.OutputSlot, c.TrackingId, c.X, c.Y, c.Pressure,
                 c.TouchMajor, c.TouchMinor, c.Orientation, c.ToolType));
         }
 
@@ -145,7 +166,7 @@ public sealed class TouchStateMachine
 
     private sealed class MutableContact
     {
-        public int Slot;
+        public int OutputSlot;
         public int TouchMajor, TouchMinor, Orientation, ToolType;
         public int TrackingId = -1;
         public int X, Y, Pressure;
