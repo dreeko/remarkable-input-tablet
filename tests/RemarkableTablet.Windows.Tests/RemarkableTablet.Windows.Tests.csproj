@@ -4,6 +4,8 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <IsPackable>false</IsPackable>
+        <!-- These tests exercise user32 synthetic input and cannot run off Windows. -->
+        <IsTestProject Condition="'$(OS)' != 'Windows_NT'">false</IsTestProject>
     </PropertyGroup>
     <ItemGroup>
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0"/>
