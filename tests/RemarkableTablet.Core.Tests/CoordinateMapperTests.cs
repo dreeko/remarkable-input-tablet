@@ -174,22 +174,26 @@ public class CoordinateMapperTests
         return (m.TiltX, m.TiltY);
     }
 
-    [Fact] public void Tilt_PortraitRotates()
+    [Fact]
+    public void Tilt_PortraitRotates()
     {
         Assert.Equal((0, 90), TiltAfter(Orientation.Portrait));
     }
 
-    [Fact] public void Tilt_LandscapeRotates()
+    [Fact]
+    public void Tilt_LandscapeRotates()
     {
         Assert.Equal((90, 0), TiltAfter(Orientation.Landscape));
     }
 
-    [Fact] public void Tilt_PortraitFlippedRotates()
+    [Fact]
+    public void Tilt_PortraitFlippedRotates()
     {
         Assert.Equal((0, -90), TiltAfter(Orientation.PortraitFlipped));
     }
 
-    [Fact] public void Tilt_LandscapeFlippedPasses()
+    [Fact]
+    public void Tilt_LandscapeFlippedPasses()
     {
         Assert.Equal((-90, 0), TiltAfter(Orientation.LandscapeFlipped));
     }

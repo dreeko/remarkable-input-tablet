@@ -29,7 +29,7 @@ public class GestureEngineTests
     public void TwoContacts_EmitsBeginWithCentroid()
     {
         var engine = new GestureEngine();
-        var ev = engine.Process(Frame(C(1, 100, 100, 0), C(2, 300, 500, 1)));
+        var ev = engine.Process(Frame(C(1, 100, 100), C(2, 300, 500, 1)));
 
         var begin = Assert.IsType<GestureBegin>(Assert.Single(ev));
         Assert.Equal(200, begin.CenterX);

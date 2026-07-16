@@ -12,7 +12,9 @@ public sealed class MouseOutput : IOutputMode
 {
     private bool _wasInContact;
 
-    public void Initialize() { }
+    public void Initialize()
+    {
+    }
 
     public void Send(MappedFrame frame)
     {

@@ -46,7 +46,9 @@ public static class EvdevParser
                     break;
             }
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+        }
         finally
         {
             output.TryComplete();
@@ -56,7 +58,10 @@ public static class EvdevParser
             // only unblock when the underlying SshCommand is disposed. Completing
             // the reader makes the next FlushAsync return IsCompleted=true so
             // the pump exits cleanly.
-            try { reader.Complete(); }
+            try
+            {
+                reader.Complete();
+            }
             catch
             {
                 /* idempotent — already completed */

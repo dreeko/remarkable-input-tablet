@@ -16,11 +16,11 @@ public class LinuxScreenDetectorTests
     public void KScreenDoctor_PrefersPrimaryEnabledOutput()
     {
         const string text = """
-            Output: 1 HDMI-A-1 enabled connected
-              Geometry: 0,0 1280x720
-            Output: 2 eDP-1 enabled connected primary
-              Geometry: 1280,0 1920x1080
-            """;
+                            Output: 1 HDMI-A-1 enabled connected
+                              Geometry: 0,0 1280x720
+                            Output: 2 eDP-1 enabled connected primary
+                              Geometry: 1280,0 1920x1080
+                            """;
         Assert.Equal((1920, 1080), LinuxScreenDetector.ParseKScreenDoctor(text));
     }
 
@@ -28,9 +28,9 @@ public class LinuxScreenDetectorTests
     public void WlrRandr_ParsesCurrentMode()
     {
         const string text = """
-            eDP-1
-              2560x1440 px, 59.951000 Hz (preferred, current)
-            """;
+                            eDP-1
+                              2560x1440 px, 59.951000 Hz (preferred, current)
+                            """;
         Assert.Equal((2560, 1440), LinuxScreenDetector.ParseWlrRandr(text));
     }
 

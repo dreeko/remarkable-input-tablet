@@ -188,7 +188,9 @@ public sealed class TabletPipeline : IAsyncDisposable
             await foreach (var frame in frames.ReadAllAsync(ct))
                 _output.Send(_mapper.Map(frame));
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     private async Task TouchOutputLoopAsync(ChannelReader<TouchFrame> frames, CancellationToken ct)
@@ -198,7 +200,9 @@ public sealed class TabletPipeline : IAsyncDisposable
             await foreach (var frame in frames.ReadAllAsync(ct))
                 _touchOutput!.Send(_touchMapper!.Map(frame));
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     private void EmitPenUp()
@@ -230,7 +234,12 @@ public sealed class TabletPipeline : IAsyncDisposable
     public void Stop()
     {
         // CTS may already be disposed if RunAsync has finished; tolerate that.
-        try { _cts.Cancel(); }
-        catch (ObjectDisposedException) { }
+        try
+        {
+            _cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 }

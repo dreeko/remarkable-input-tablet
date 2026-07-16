@@ -43,7 +43,10 @@ public sealed class SshDeviceStream
     /// </summary>
     internal void DisposeCommand()
     {
-        try { _command.Dispose(); }
+        try
+        {
+            _command.Dispose();
+        }
         catch
         {
             /* best-effort — we're tearing down anyway */
@@ -89,8 +92,13 @@ public sealed class SshDeviceStream
                 if (flushTask.Result.IsCompleted) break;
             }
         }
-        catch (OperationCanceledException) { }
-        catch (Exception ex) { fault = ex; }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            fault = ex;
+        }
         finally
         {
             writer.Complete(fault);

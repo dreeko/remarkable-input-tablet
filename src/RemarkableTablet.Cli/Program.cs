@@ -1,18 +1,17 @@
+#if WINDOWS_PLATFORM
+using RemarkableTablet.Windows.Interop;
+using RemarkableTablet.Windows.Output;
+#elif LINUX_PLATFORM
+using RemarkableTablet.Linux.Display;
+using RemarkableTablet.Linux.Output;
+#endif
 using System.Net.Sockets;
-using Renci.SshNet.Common;
 using RemarkableTablet.Core.Devices;
 using RemarkableTablet.Core.Mapping;
 using RemarkableTablet.Core.Output;
 using RemarkableTablet.Core.Pipeline;
 using RemarkableTablet.Core.Transport;
-#if WINDOWS_PLATFORM
-using RemarkableTablet.Windows.Interop;
-using RemarkableTablet.Windows.Output;
-
-#elif LINUX_PLATFORM
-using RemarkableTablet.Linux.Display;
-using RemarkableTablet.Linux.Output;
-#endif
+using Renci.SshNet.Common;
 
 // ── Parse args ───────────────────────────────────────────────────────────────
 if (args.Contains("--help") || args.Contains("-h"))
@@ -154,9 +153,13 @@ if (gestures == "touch")
 #endif
 }
 else if (gestures == "synth")
+{
     Console.Error.WriteLine("Warning: --gestures synth is not yet implemented; ignoring.");
+}
 else if (gestures != "off")
+{
     Console.Error.WriteLine($"Warning: unknown --gestures value '{gestures}'; expected touch|synth|off.");
+}
 
 var transport = new SshTransport(connOpts);
 transport.StateChanged += state =>
@@ -246,7 +249,8 @@ static string? ValidateArgs(string[] values)
 
     var orientationValue = GetArg(values, "--orientation", "portrait")!;
     if (!OneOf(orientationValue, "portrait", "landscape", "portraitflipped", "landscapeflipped"))
-        return $"invalid --orientation '{orientationValue}'; expected portrait, landscape, portraitflipped, or landscapeflipped.";
+        return
+            $"invalid --orientation '{orientationValue}'; expected portrait, landscape, portraitflipped, or landscapeflipped.";
 
     var pressureValue = GetArg(values, "--pressure", "linear")!;
     if (!OneOf(pressureValue, "linear", "soft", "hard"))

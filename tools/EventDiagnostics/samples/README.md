@@ -1,8 +1,8 @@
 # Touchscreen evtest captures — Phase 0 verification
 
-Source: `evtest --grab /dev/input/event2` on rM2 firmware (capture date 2026-05-07).
-Raw log: [`touch-header.log`](touch-header.log) (single ~10 s capture, despite filename — full session.log was not
-produced separately).
+Source: `evtest --grab /dev/input/event2` on rM2 firmware (capture date 2026-05-07). Raw log: [
+`touch-header.log`](touch-header.log) (single ~10 s capture, despite filename — full session.log was not produced
+separately).
 
 ## Confirmed device facts
 
@@ -26,11 +26,11 @@ produced separately).
 
 ## ⚠ Surprises that affect the plan
 
-1. **`BTN_TOUCH` is NOT reported by this device.** The only `EV_KEY` codes exposed are `KEY_F1`–`KEY_F8` (
-   gesture-shortcut keys, irrelevant to pointer logic). Contact lifecycle must therefore be derived **purely
-   from `ABS_MT_TRACKING_ID` transitions**: a positive value starts a contact in the current slot; `-1` releases it. The
-   pen state machine had a fallback (`pressure > 0` ⇒ contact) because `BTN_TOUCH` was unreliable there too — for touch
-   we have no fallback at all, so the parser must be strict about tracking IDs.
+1. **`BTN_TOUCH` is NOT reported by this device.** The only `EV_KEY` codes exposed are `KEY_F1`–`KEY_F8`
+   (gesture-shortcut keys, irrelevant to pointer logic). Contact lifecycle must therefore be derived **purely from
+   `ABS_MT_TRACKING_ID` transitions**: a positive value starts a contact in the current slot; `-1` releases it. The pen
+   state machine had a fallback (`pressure > 0` ⇒ contact) because `BTN_TOUCH` was unreliable there too — for touch we
+   have no fallback at all, so the parser must be strict about tracking IDs.
 
 2. **`ABS_MT_TOOL_TYPE` is reported.** Range 0–1. `MT_TOOL_FINGER = 0`, `MT_TOOL_PEN = 1` per the kernel — though for an
    `pt_mt` capacitive sensor "pen" likely means "stylus-like contact size" rather than the actual Wacom pen (which is on
@@ -38,7 +38,7 @@ produced separately).
 
 3. **32 slots** is far more than necessary. We will cap our `TouchMaxContacts` at a sensible value (5 is plenty for
    two-finger gestures plus palm contacts). The slot index space is sparse; we don't allocate per-slot storage for all
-   32.
+    32.
 
 4. **Sample rate ~85 Hz is faster than the 60 Hz typical of capacitive touch.** Good news for latency; transport
    bandwidth is not a concern.

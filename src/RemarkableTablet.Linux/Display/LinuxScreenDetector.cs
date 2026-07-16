@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 
@@ -6,8 +7,8 @@ namespace RemarkableTablet.Linux.Display;
 public readonly record struct DetectedScreen(int Width, int Height, string Source);
 
 /// <summary>
-/// Detects the logical desktop size exposed by common Linux display stacks.
-/// Explicit CLI dimensions should always take precedence over this result.
+///     Detects the logical desktop size exposed by common Linux display stacks.
+///     Explicit CLI dimensions should always take precedence over this result.
 /// </summary>
 public static partial class LinuxScreenDetector
 {
@@ -42,7 +43,7 @@ public static partial class LinuxScreenDetector
     {
         // Prefer the primary output. If no primary marker is present, use the
         // first enabled output geometry.
-        var blocks = Regex.Split(output, @"(?m)(?=^Output:)" );
+        var blocks = Regex.Split(output, @"(?m)(?=^Output:)");
         foreach (var primaryOnly in new[] { true, false })
         foreach (var block in blocks)
         {
@@ -68,7 +69,8 @@ public static partial class LinuxScreenDetector
     {
         try
         {
-            foreach (var statusPath in Directory.EnumerateFiles("/sys/class/drm", "status", SearchOption.AllDirectories))
+            foreach (var statusPath in
+                     Directory.EnumerateFiles("/sys/class/drm", "status", SearchOption.AllDirectories))
             {
                 if (!File.ReadAllText(statusPath).Trim().Equals("connected", StringComparison.OrdinalIgnoreCase))
                     continue;
@@ -82,8 +84,12 @@ public static partial class LinuxScreenDetector
                     return new DetectedScreen(size.Value.Width, size.Value.Height, "DRM sysfs");
             }
         }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
 
         return null;
     }
@@ -107,14 +113,14 @@ public static partial class LinuxScreenDetector
             process.Start();
             if (!process.WaitForExit(1500))
             {
-                process.Kill(entireProcessTree: true);
+                process.Kill(true);
                 return null;
             }
 
             var output = process.StandardOutput.ReadToEnd();
             return process.ExitCode == 0 ? output : null;
         }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
         {
             return null;
         }

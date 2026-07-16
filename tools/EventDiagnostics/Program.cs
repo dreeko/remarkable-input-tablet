@@ -18,18 +18,20 @@ string? keyPath = null;
 if (args.Length >= 1) host = args[0];
 
 if (args.Length >= 3 && args[1] == "--key")
+{
     keyPath = args[2];
+}
 else if (args.Length >= 2)
+{
     password = args[1];
+}
 else
 {
     Console.Write("Password (or press Enter to use SSH key at ~/.ssh/id_rsa): ");
     var input = Console.ReadLine();
     if (string.IsNullOrWhiteSpace(input))
-    {
         keyPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ssh", "id_rsa");
-    }
     else
         password = input;
 }
@@ -97,7 +99,9 @@ try
     await foreach (var ev in channel.Reader.ReadAllAsync(cts.Token))
         PrintEvent(ev);
 }
-catch (OperationCanceledException) { }
+catch (OperationCanceledException)
+{
+}
 
 MaybeNewline();
 await parseTask;

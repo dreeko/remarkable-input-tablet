@@ -35,11 +35,9 @@ public sealed class UinputTouchOutput : ITouchOutput
     {
         _fd = Libc.open("/dev/uinput", Libc.O_WRONLY | Libc.O_NONBLOCK);
         if (_fd < 0)
-        {
             throw new InvalidOperationException(
                 $"Cannot open /dev/uinput (errno {Marshal.GetLastWin32Error()}). " +
                 "Add yourself to the 'input' group: sudo usermod -aG input $USER");
-        }
 
         Ioctl(UinputIoctl.UI_SET_EVBIT);
         Ioctl(UinputIoctl.UI_SET_EVBIT, EvType.EV_KEY);
@@ -207,18 +205,14 @@ public sealed class UinputTouchOutput : ITouchOutput
     private void Ioctl(ulong request, int arg = 0)
     {
         if (Libc.ioctl_int(_fd, request, arg) < 0)
-        {
             throw new InvalidOperationException(
                 $"uinput ioctl 0x{request:X} failed (errno {Marshal.GetLastWin32Error()})");
-        }
     }
 
     private unsafe void IoctlPtr(ulong request, void* arg)
     {
         if (Libc.ioctl_ptr(_fd, request, arg) < 0)
-        {
             throw new InvalidOperationException(
                 $"uinput ioctl 0x{request:X} failed (errno {Marshal.GetLastWin32Error()})");
-        }
     }
 }

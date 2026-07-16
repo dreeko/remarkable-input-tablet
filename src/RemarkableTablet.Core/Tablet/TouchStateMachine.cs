@@ -14,11 +14,12 @@ namespace RemarkableTablet.Core.Tablet;
 /// </summary>
 public sealed class TouchStateMachine
 {
+    private readonly HashSet<int> _assignedOutputSlots = new();
+
     // Slot indices are sparse (firmware reports up to 32) so a dictionary
     // costs less than a fixed-size array of nullable structs and degrades
     // gracefully if a future firmware expands the slot range.
     private readonly Dictionary<int, MutableContact> _slots = new();
-    private readonly HashSet<int> _assignedOutputSlots = new();
     private int _currentSlot;
 
     public static async Task RunAsync(
@@ -32,7 +33,9 @@ public sealed class TouchStateMachine
             await foreach (var ev in input.ReadAllAsync(ct))
                 sm.Process(ev, output);
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+        }
         finally
         {
             output.TryComplete();
@@ -56,7 +59,9 @@ public sealed class TouchStateMachine
     private void HandleSync(ushort code, ChannelWriter<TouchFrame> output)
     {
         if (code == EvdevCodes.SYN_REPORT)
+        {
             output.TryWrite(Snapshot());
+        }
         else if (code == EvdevCodes.SYN_DROPPED)
         {
             // Kernel ring overflow: release everything and emit empty so
@@ -88,6 +93,7 @@ public sealed class TouchStateMachine
                     if (contact.OutputSlot < 0)
                         contact.OutputSlot = AllocateOutputSlot();
                 }
+
                 break;
 
             case EvdevCodes.ABS_MT_POSITION_X:

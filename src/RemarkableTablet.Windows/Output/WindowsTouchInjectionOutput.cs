@@ -43,11 +43,9 @@ public sealed class WindowsTouchInjectionOutput : ITouchOutput
             User32.POINTER_FEEDBACK_DEFAULT);
 
         if (_device == IntPtr.Zero)
-        {
             throw new InvalidOperationException(
                 $"CreateSyntheticPointerDevice(PT_TOUCH) failed: error {Marshal.GetLastWin32Error()}. " +
                 "Requires Windows 10 version 1809 or later.");
-        }
     }
 
     public void Send(MappedTouchFrame frame)
@@ -190,7 +188,8 @@ public sealed class WindowsTouchInjectionOutput : ITouchOutput
         fixed (POINTER_TYPE_INFO_TOUCH* p = infos)
         {
             if (!User32.InjectSyntheticTouchInput(_device, p, count))
-                Trace.WriteLine($"InjectSyntheticPointerInput(touch) rejected: count={count} err={Marshal.GetLastWin32Error()}");
+                Trace.WriteLine(
+                    $"InjectSyntheticPointerInput(touch) rejected: count={count} err={Marshal.GetLastWin32Error()}");
         }
     }
 

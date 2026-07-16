@@ -118,7 +118,10 @@ public sealed class SshTransport : IAsyncDisposable
         foreach (var s in _streams)
             await s.AwaitPumpAsync(pumpTimeout);
 
-        try { _client?.Disconnect(); }
+        try
+        {
+            _client?.Disconnect();
+        }
         catch
         {
             /* best-effort */

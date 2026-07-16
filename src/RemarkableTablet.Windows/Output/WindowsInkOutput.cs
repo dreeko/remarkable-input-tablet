@@ -27,11 +27,9 @@ public sealed class WindowsInkOutput : IOutputMode
             User32.PT_PEN, 1, User32.POINTER_FEEDBACK_DEFAULT);
 
         if (_device == IntPtr.Zero)
-        {
             throw new InvalidOperationException(
                 $"CreateSyntheticPointerDevice failed: error {Marshal.GetLastWin32Error()}. " +
                 "Requires Windows 10 version 1809 or later.");
-        }
     }
 
     public void Send(MappedFrame frame)
@@ -115,11 +113,9 @@ public sealed class WindowsInkOutput : IOutputMode
         if (_isFirstFrame) baseFlags |= PointerFlags.New;
 
         if (!frame.InRange)
-        {
             // Pen left the digitizer entirely. If we were in contact, emit Up;
             // otherwise the early-return in Send() already handled the no-op case.
             return baseFlags | PointerFlags.Up;
-        }
 
         var flags = baseFlags | PointerFlags.InRange;
 
@@ -134,7 +130,9 @@ public sealed class WindowsInkOutput : IOutputMode
             flags = baseFlags | PointerFlags.Up | PointerFlags.InRange;
         }
         else
+        {
             flags |= PointerFlags.Update; // hovering
+        }
 
         return flags;
     }

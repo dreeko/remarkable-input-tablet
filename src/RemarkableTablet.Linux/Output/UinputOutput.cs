@@ -35,11 +35,9 @@ public sealed class UinputOutput : IOutputMode
     {
         _fd = Libc.open("/dev/uinput", Libc.O_WRONLY | Libc.O_NONBLOCK);
         if (_fd < 0)
-        {
             throw new InvalidOperationException(
                 $"Cannot open /dev/uinput (errno {Marshal.GetLastWin32Error()}). " +
                 "Add yourself to the 'input' group: sudo usermod -aG input $USER");
-        }
 
         // Declare event types this device produces
         Ioctl(UinputIoctl.UI_SET_EVBIT);
@@ -183,18 +181,14 @@ public sealed class UinputOutput : IOutputMode
     private void Ioctl(ulong request, int arg = 0)
     {
         if (Libc.ioctl_int(_fd, request, arg) < 0)
-        {
             throw new InvalidOperationException(
                 $"uinput ioctl 0x{request:X} failed (errno {Marshal.GetLastWin32Error()})");
-        }
     }
 
     private unsafe void IoctlPtr(ulong request, void* arg)
     {
         if (Libc.ioctl_ptr(_fd, request, arg) < 0)
-        {
             throw new InvalidOperationException(
                 $"uinput ioctl 0x{request:X} failed (errno {Marshal.GetLastWin32Error()})");
-        }
     }
 }

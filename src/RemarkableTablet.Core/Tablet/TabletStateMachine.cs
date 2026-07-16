@@ -25,7 +25,9 @@ public sealed class TabletStateMachine
             await foreach (var ev in input.ReadAllAsync(ct))
                 sm.Process(ev, output);
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+        }
         finally
         {
             output.TryComplete();
@@ -53,7 +55,9 @@ public sealed class TabletStateMachine
     private void HandleSync(ushort code, ChannelWriter<PenFrame> output)
     {
         if (code == EvdevCodes.SYN_REPORT)
+        {
             output.TryWrite(Snapshot());
+        }
         else if (code == EvdevCodes.SYN_DROPPED)
         {
             // Kernel dropped events — every key state is unknown. Clear all
