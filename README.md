@@ -395,3 +395,5 @@ The active "Marker Plus" stylus is battery-powered and inductively charged, not 
 ## License
 
 MIT
+
+Maintained by [Keegan Ott](https://dreeko.me/).
