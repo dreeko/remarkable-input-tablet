@@ -397,13 +397,13 @@ If you have a Paper Pro and want to help, run `tools/EventDiagnostics` against `
 ### Pen digitizer (`/dev/input/event1`)
 
 Confirmed via `evtest` on firmware version 1231 (Wacom I2C Digitizer).
-Axis convention re-verified 2026-05-07 against the touchscreen — earlier docs
+Axis convention measured 2026-07-25 by corner calibration on real hardware — earlier docs
 had ABS_X / ABS_Y rotated 180°.
 
 | Axis | Range | Notes |
 |------|-------|-------|
-| ABS_X | 0 – 20966 | Long axis: 0 = top of device, max = USB/bottom (portrait) |
-| ABS_Y | 0 – 15725 | Short axis: 0 = right, max = left (portrait) |
+| ABS_X | 0 – 20966 | Long axis: **0 = bottom (USB edge), max = top** (portrait). Measured: 20258–20584 along the top edge |
+| ABS_Y | 0 – 15725 | Short axis: **0 = left, max = right** (portrait). Measured: 672 at top-left, 15258 at top-right |
 | Pressure | 0 – 4095 | 12-bit, mapped to 0–1024 via shaping curve (Windows Ink scale) |
 | Distance | 0 – 255 | Hover height above surface |
 | Tilt X/Y | −9000 – 9000 | Firmware units, mapped to ±90° |
@@ -414,41 +414,42 @@ Capacitive multi-touch panel, driver `pt_mt`. Confirmed via `evtest` 2026-05-07.
 
 | Axis | Range | Notes |
 |------|-------|-------|
-| ABS_MT_POSITION_X | 0 – 1403 | Short axis. Origin *assumed* display top-left — see the caveat below |
-| ABS_MT_POSITION_Y | 0 – 1871 | Long axis. Origin *assumed* display top-left — see the caveat below |
+| ABS_MT_POSITION_X | 0 – 1403 | Short axis: **0 = left**. Measured: 85 at top-left, 1379 at top-right |
+| ABS_MT_POSITION_Y | 0 – 1871 | Long axis: **0 = bottom**. Measured: ≈1836 all along the top edge |
 | ABS_MT_PRESSURE | 0 – 255 | Per-contact pressure |
 | ABS_MT_SLOT | 0 – 31 | Hardware-reported; tool caps tracking at 5 |
 | ABS_MT_TRACKING_ID | 0 – 65535 | Monotonically incrementing per-contact ID |
 | Sample rate | ~85 Hz | Measured under continuous motion |
 
-> **⚠ Unverified premise — the one thing to check if the mapping feels wrong.**
-> Every orientation case for *both* pen and touch assumes the touch panel's (0,0)
-> is the display's **top-left**. `INPUT_PROP_DIRECT` does not establish that: it
-> only says the digitizer overlays a display, not which corner is the origin or
-> whether an axis is mirrored (the kernel has `touchscreen-inverted-x/-y` device-tree
-> properties precisely because panels ship mirrored). The pen convention was then
-> *derived from* the touch assumption, so if touch is mirrored, pen is wrong the
-> same way — the two still agree with each other and every unit test still passes.
-> This convention has already been flipped 180° once.
+> **Origin, settled by measurement (2026-07-25).** The panel is `INPUT_PROP_DIRECT`,
+> but that only means the digitizer overlays a display — it says nothing about which
+> corner is the origin. Here the origin is the **bottom-left**, not the display's
+> top-left, and the pen's axes are inverted on both axes relative to what the docs
+> claimed. Until this was measured, pen and touch disagreed with each other by a
+> horizontal mirror: a pen stroke on the physical top-left corner landed at the
+> screen's bottom-right while a finger on the same spot landed bottom-left.
 >
-> To settle it: hold the device USB-C-port-down, run `tools/EventDiagnostics`
-> against `/dev/input/event2`, and touch the **top-left** corner. Raw values near
-> (0, 0) confirm the premise; near (1403, 1871) means everything is 180° out. Repeat
-> on `event1` with the pen at the same corner, and commit both captures to
-> `tools/EventDiagnostics/samples/` — the pen capture the axis table above cites is
-> not currently in the repo, so nobody can re-check it.
+> Method and raw captures: [Corner calibration](../tools/EventDiagnostics/samples/README.md#corner-calibration-2026-07-25).
+> Two corners of the *same edge*, not diagonal ones — diagonal corners can't tell a
+> rotation from a mirror. The measured values are pinned as test data, including a
+> cross-device test that pen and touch land within 40 px of each other.
 
 > **Pen-priority hardware behavior:** the rM2 firmware suppresses the
-> touchscreen entirely while the pen is in proximity. Verified. It is no longer
-> load-bearing, though: the host-side pen gate runs regardless, so correctness does
-> not depend on firmware arbitration (see [Palm rejection](#palm-rejection)).
+> touchscreen entirely while the pen is in proximity — and it does so by simply
+> going silent: a contact that is live when the pen arrives is **never released**
+> (no `ABS_MT_TRACKING_ID = -1`), measured 2026-07-25. Left alone, the host would
+> hold that contact forever, which is what the pen gate and the stale-contact sweep
+> exist to prevent (see [Palm rejection](#palm-rejection)).
 > Workflow is unchanged: lift the pen, gesture, then resume drawing.
 
-> **Note on tilt:** tilt rotation matches the position transform that aligns
-> with the touchscreen. The Windows Ink sign convention (positive tilt-X =
-> pen leans toward +X screen axis) is not independently verified — if brush
-> highlights point the wrong direction, the four cases in
-> `CoordinateMapper.RotateTilt` are the place to flip signs.
+> **Note on tilt:** the tilt vector rotates with the corrected position transform —
+> `+ABS_TILT_X` leans along `+ABS_X`, which the corner captures show points *up* the
+> device (screen −Y in portrait), and `+ABS_TILT_Y` leans along `+ABS_Y`, which points
+> right. All four cases were negated by the 2026-07-25 correction, since the pen axes
+> turned out to be 180° out. What is still unverified is the *hardware's* sign
+> convention — whether leaning the pen away from you increases or decreases
+> `ABS_TILT_X`. If brush highlights point the wrong way, `CoordinateMapper.RotateTilt`
+> is where to flip.
 
 ## Hardware details — Paper Pro
 

@@ -20,13 +20,27 @@ public class TouchCoordinateMapperTests
         return new TouchFrame(contacts);
     }
 
+    // Panel axes measured 2026-07-25 (samples/hw2-touch.log): X = 0 at the left,
+    // Y = 0 at the BOTTOM. So the panel's raw origin is the screen's bottom-left.
+    private static MappingOptions Portrait()
+    {
+        return MappingOptions.ForScreen(1920, 1080, Orientation.Portrait, FitMode.Stretch);
+    }
+
+    [Fact]
+    public void Portrait_PanelOriginIsTheScreensBottomLeft()
+    {
+        var f = new TouchCoordinateMapper(Portrait(), Rm2).Map(Frame(Contact(0, 0)));
+
+        Assert.Equal(0, f.Contacts[0].ScreenX);
+        Assert.Equal(1079, f.Contacts[0].ScreenY);
+    }
+
     [Fact]
     public void Portrait_TopLeftMapsToScreenTopLeft()
     {
-        var opts = MappingOptions.ForScreen(1920, 1080);
-        var mapper = new TouchCoordinateMapper(opts, Rm2);
-
-        var f = mapper.Map(Frame(Contact(0, 0)));
+        // Physical top-left = (X=0, Y=YMax).
+        var f = new TouchCoordinateMapper(Portrait(), Rm2).Map(Frame(Contact(0, Rm2.Touch.YMax)));
 
         Assert.Equal(0, f.Contacts[0].ScreenX);
         Assert.Equal(0, f.Contacts[0].ScreenY);
@@ -35,15 +49,26 @@ public class TouchCoordinateMapperTests
     [Fact]
     public void Portrait_BottomRightMapsToScreenBottomRight()
     {
-        var opts = MappingOptions.ForScreen(1920, 1080);
-        var mapper = new TouchCoordinateMapper(opts, Rm2);
-
-        var f = mapper.Map(Frame(Contact(
-            Rm2.Touch.XMax,
-            Rm2.Touch.YMax)));
+        // Physical bottom-right = (X=XMax, Y=0).
+        var f = new TouchCoordinateMapper(Portrait(), Rm2).Map(Frame(Contact(Rm2.Touch.XMax, 0)));
 
         Assert.Equal(1919, f.Contacts[0].ScreenX);
         Assert.Equal(1079, f.Contacts[0].ScreenY);
+    }
+
+    // Raw samples from the hardware capture: fingertip on the top-left corner,
+    // then the top-right corner, device portrait with the USB-C edge at the bottom.
+    [Theory]
+    [InlineData(85, 1837, 0)]
+    [InlineData(1379, 1835, 1919)]
+    public void MeasuredTouchCorners_LandAlongTheTopOfTheScreen(int rawX, int rawY, int expectX)
+    {
+        var f = new TouchCoordinateMapper(Portrait(), Rm2).Map(Frame(Contact(rawX, rawY)));
+
+        // ~7 % tolerance: a fingertip centre can't sit closer than half a finger
+        // width to the edge, so this pins the corner, not the exact pixel.
+        Assert.InRange(f.Contacts[0].ScreenX, expectX == 0 ? 0 : 1790, expectX == 0 ? 130 : 1919);
+        Assert.InRange(f.Contacts[0].ScreenY, 0, 40);
     }
 
     [Fact]
@@ -83,17 +108,16 @@ public class TouchCoordinateMapperTests
     [Fact]
     public void LandscapeFlipsAxesAppropriately()
     {
-        // In Landscape, top-left of touch panel (X=0, Y=0) should map to
-        // bottom-left of the screen (the rotated frame).
-        var opts = MappingOptions.ForScreen(1920, 1080, Orientation.Landscape);
+        // Panel origin (X=0, Y=0) is the device's BOTTOM-left corner. Landscape
+        // rotates the device 90° CCW, which swings that corner to the screen's
+        // bottom-right.
+        var opts = MappingOptions.ForScreen(1920, 1080, Orientation.Landscape, FitMode.Stretch);
         var mapper = new TouchCoordinateMapper(opts, Rm2);
 
         var f = mapper.Map(Frame(Contact(0, 0)));
 
-        // Y=0 panel ↦ rx = ny = 0   ↦ ScreenX = 0
-        // X=0 panel ↦ ry = 1 - nx = 1 ↦ ScreenY ≈ MonitorH - 1 (truncation)
-        Assert.Equal(0, f.Contacts[0].ScreenX);
-        Assert.InRange(f.Contacts[0].ScreenY, 1078, 1080);
+        Assert.Equal(1919, f.Contacts[0].ScreenX);
+        Assert.Equal(1079, f.Contacts[0].ScreenY);
     }
 
     [Fact]

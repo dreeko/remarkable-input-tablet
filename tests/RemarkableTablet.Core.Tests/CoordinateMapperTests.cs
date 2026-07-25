@@ -70,14 +70,12 @@ public class CoordinateMapperTests
     [Fact]
     public void PortraitOrigin_MapsToTopLeft()
     {
-        // Pen aligned with touch (verified 2026-05-07):
-        //   ABS_X is the long axis  (0 = top in portrait, PenXMax = USB/bottom).
-        //   ABS_Y is the short axis (0 = right,           PenYMax = left).
-        // Physical top-left in portrait = (ABS_X=0, ABS_Y=PenYMax).
-        // Formula (1-ny, nx): rx=0, ry=0 → screen (0, 0).
+        // Pen axes measured 2026-07-25 (samples/hw2-pen.log):
+        //   ABS_X is the long axis  (0 = bottom/USB edge, PenXMax = top).
+        //   ABS_Y is the short axis (0 = left,            PenYMax = right).
+        // Physical top-left in portrait = (ABS_X=PenXMax, ABS_Y=0).
         var mapper = MakeMapper(Orientation.Portrait);
-        var frame = MakeFrame(0, Rm2.Pen.YMax);
-        var mapped = mapper.Map(frame);
+        var mapped = mapper.Map(MakeFrame(Rm2.Pen.XMax, 0));
         Assert.Equal(0, mapped.ScreenX);
         Assert.Equal(0, mapped.ScreenY);
     }
@@ -85,11 +83,58 @@ public class CoordinateMapperTests
     [Fact]
     public void PortraitOppositeCorner_MapsInsideFinalScreenPixel()
     {
+        // Physical bottom-right = (ABS_X=0, ABS_Y=PenYMax).
         var mapped = MakeMapper(Orientation.Portrait)
-            .Map(MakeFrame(Rm2.Pen.XMax, 0));
+            .Map(MakeFrame(0, Rm2.Pen.YMax));
 
         Assert.Equal(1919, mapped.ScreenX);
         Assert.Equal(1079, mapped.ScreenY);
+    }
+
+    // Raw samples straight from the hardware captures, so a future "correction"
+    // to the axis convention has to argue with the device rather than with a
+    // formula. Device held portrait, USB-C edge at the bottom.
+    [Theory]
+    // pen tip on the top-left corner, then the top-right corner
+    [InlineData(20258, 672, 0, 0)]
+    [InlineData(20584, 15258, 1919, 0)]
+    public void MeasuredPenCorners_LandOnTheCorrespondingScreenCorner(
+        int rawX, int rawY, int expectX, int expectY)
+    {
+        var mapped = MakeMapper(Orientation.Portrait).Map(MakeFrame(rawX, rawY));
+
+        // Within ~7 % of the edge: a tip resting on a corner sits several mm in
+        // from the true extreme, so this pins the corner, not the exact pixel.
+        Assert.InRange(mapped.ScreenX, expectX == 0 ? 0 : 1790, expectX == 0 ? 130 : 1919);
+        Assert.InRange(mapped.ScreenY, 0, 80);
+    }
+
+    // The regression that would have caught the original bug. Both devices were
+    // captured touching the SAME two corners in the SAME hold, so their mapped
+    // pixels must agree — no formula involved, just the hardware. Before the
+    // 2026-07-25 correction these disagreed by a full horizontal mirror: a pen
+    // stroke on the top-left corner landed bottom-right while a finger on the
+    // same spot landed bottom-left.
+    [Theory]
+    // top-left corner:  pen (X,Y),      touch (X,Y)
+    [InlineData(20258, 672, 85, 1837)]
+    // top-right corner: pen (X,Y),      touch (X,Y)
+    [InlineData(20584, 15258, 1379, 1835)]
+    public void MeasuredCorners_PenAndTouchLandInTheSamePlace(
+        int penX, int penY, int touchX, int touchY)
+    {
+        var opts = MappingOptions.ForScreen(1920, 1080, Orientation.Portrait, FitMode.Stretch);
+        var pen = new CoordinateMapper(opts, Rm2, PressureCurve.Linear);
+        var touch = new TouchCoordinateMapper(opts, Rm2, pen.Transform);
+
+        var p = pen.Map(MakeFrame(penX, penY));
+        var t = touch.Map(new TouchFrame([new TouchContact(0, 1, touchX, touchY, 0, 0, 0, 0, 0)]))
+            .Contacts[0];
+
+        // 40 px ≈ 3 mm of screen: the gap between where a pen tip and a fingertip
+        // sit when both are "on the corner". A mirrored axis shows up as ~1900 px.
+        Assert.InRange(Math.Abs(p.ScreenX - t.ScreenX), 0, 40);
+        Assert.InRange(Math.Abs(p.ScreenY - t.ScreenY), 0, 40);
     }
 
     [Fact]
@@ -114,17 +159,17 @@ public class CoordinateMapperTests
     }
 
 
-    // Orientation corner tests — each orientation maps one physical corner to screen (0,0).
-    // Pen aligned with touch: ABS_X long axis (0=top portrait); ABS_Y short axis (0=right portrait).
+    // Orientation corner tests — each orientation maps one physical corner to
+    // screen (0,0). Measured pen axes: ABS_X long axis (0 = bottom/USB edge in
+    // portrait); ABS_Y short axis (0 = left in portrait).
 
     [Fact]
     public void LandscapeOrigin_MapsToTopLeft()
     {
-        // Landscape: pen slot on the right. Physical top-left = (ABS_X=0, ABS_Y=0).
-        // Formula (nx, ny): rx=0, ry=0 → screen (0,0).
+        // Landscape = portrait rotated 90° CCW, so the device's TOP-RIGHT corner
+        // swings round to the screen's top-left: (ABS_X=PenXMax, ABS_Y=PenYMax).
         var mapper = MakeMapper(Orientation.Landscape);
-        var frame = MakeFrame(0, 0);
-        var mapped = mapper.Map(frame);
+        var mapped = mapper.Map(MakeFrame(Rm2.Pen.XMax, Rm2.Pen.YMax));
         Assert.Equal(0, mapped.ScreenX);
         Assert.Equal(0, mapped.ScreenY);
     }
@@ -132,12 +177,10 @@ public class CoordinateMapperTests
     [Fact]
     public void PortraitFlippedOrigin_MapsToTopLeft()
     {
-        // PortraitFlipped = 180° from portrait; USB at top.
-        // Physical top-left = (ABS_X=PenXMax, ABS_Y=0).
-        // Formula (ny, 1-nx): rx=0, ry=0 → screen (0,0).
+        // PortraitFlipped = 180°, USB edge at the top. The device's bottom-right
+        // corner is now the screen's top-left: (ABS_X=0, ABS_Y=PenYMax).
         var mapper = MakeMapper(Orientation.PortraitFlipped);
-        var frame = MakeFrame(Rm2.Pen.XMax, 0);
-        var mapped = mapper.Map(frame);
+        var mapped = mapper.Map(MakeFrame(0, Rm2.Pen.YMax));
         Assert.Equal(0, mapped.ScreenX);
         Assert.Equal(0, mapped.ScreenY);
     }
@@ -145,12 +188,11 @@ public class CoordinateMapperTests
     [Fact]
     public void LandscapeFlippedOrigin_MapsToTopLeft()
     {
-        // LandscapeFlipped: pen slot on the left.
-        // Physical top-left = (ABS_X=PenXMax, ABS_Y=PenYMax).
-        // Formula (1-nx, 1-ny): rx=0, ry=0 → screen (0,0).
+        // LandscapeFlipped = portrait rotated 90° CW, USB edge on the left. The
+        // device's BOTTOM-LEFT corner swings round to the screen's top-left:
+        // (ABS_X=0, ABS_Y=0).
         var mapper = MakeMapper(Orientation.LandscapeFlipped);
-        var frame = MakeFrame(Rm2.Pen.XMax, Rm2.Pen.YMax);
-        var mapped = mapper.Map(frame);
+        var mapped = mapper.Map(MakeFrame(0, 0));
         Assert.Equal(0, mapped.ScreenX);
         Assert.Equal(0, mapped.ScreenY);
     }
@@ -195,13 +237,13 @@ public class CoordinateMapperTests
 
     // ── Tilt rotation: tilt vector must rotate in lockstep with position ───────
 
-    // Raw tilt (TiltXMax, 0) → after ScaleTilt: (90, 0). After RotateTilt
-    // (rotated 180° vs. previous convention so the tilt vector follows the
-    // position transform that aligns with touch):
-    //   Portrait        → (0,   90)
-    //   Landscape       → (90,  0)
-    //   PortraitFlipped → (0,  -90)
-    //   LandscapeFlip   → (-90, 0)
+    // Raw tilt (TiltXMax, 0) → after ScaleTilt: (90, 0), i.e. the pen leaning
+    // fully along +ABS_X, which the hardware captures show points UP the device.
+    // Up is screen −Y in portrait, so the rotated vector is:
+    //   Portrait        → (0,  -90)
+    //   Landscape       → (-90,  0)
+    //   PortraitFlipped → (0,   90)
+    //   LandscapeFlip   → (90,   0)
     private static (int X, int Y) TiltAfter(Orientation o)
     {
         var mapper = MakeMapper(o);
@@ -213,25 +255,25 @@ public class CoordinateMapperTests
     [Fact]
     public void Tilt_PortraitRotates()
     {
-        Assert.Equal((0, 90), TiltAfter(Orientation.Portrait));
+        Assert.Equal((0, -90), TiltAfter(Orientation.Portrait));
     }
 
     [Fact]
     public void Tilt_LandscapeRotates()
     {
-        Assert.Equal((90, 0), TiltAfter(Orientation.Landscape));
+        Assert.Equal((-90, 0), TiltAfter(Orientation.Landscape));
     }
 
     [Fact]
     public void Tilt_PortraitFlippedRotates()
     {
-        Assert.Equal((0, -90), TiltAfter(Orientation.PortraitFlipped));
+        Assert.Equal((0, 90), TiltAfter(Orientation.PortraitFlipped));
     }
 
     [Fact]
     public void Tilt_LandscapeFlippedPasses()
     {
-        Assert.Equal((-90, 0), TiltAfter(Orientation.LandscapeFlipped));
+        Assert.Equal((90, 0), TiltAfter(Orientation.LandscapeFlipped));
     }
 
     // ── PressureCurve.FromName ────────────────────────────────────────────────

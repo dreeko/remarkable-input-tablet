@@ -1,5 +1,10 @@
 # Touchscreen evtest captures — Phase 0 verification
 
+> **2026-07-25: the axis conventions in the older sections below were wrong.** Corner captures on real
+> hardware ([`corners-touch-2026-07-25.bin`](corners-touch-2026-07-25.bin),
+> [`corners-pen-2026-07-25.bin`](corners-pen-2026-07-25.bin)) settled it — see
+> [Corner calibration](#corner-calibration-2026-07-25) at the bottom. Read that first.
+
 Source: `evtest --grab /dev/input/event2` on rM2 firmware (capture date 2026-05-07). Raw log: [
 `touch-header.log`](touch-header.log) (single ~10 s capture, despite filename — full session.log was not produced
 separately).
@@ -156,3 +161,75 @@ To be folded into `docs/IMPLEMENTATION_PLAN_TOUCH.md` after the missing motions 
   the data. Initial implementation can ignore it.
 - Slot allocation: use a `Dictionary<int slot, Contact>` rather than a fixed array sized to 32 — avoids wasted memory
   and accommodates sparse slot indices.
+
+---
+
+## Corner calibration (2026-07-25)
+
+Raw captures: [`corners-touch-2026-07-25.bin`](corners-touch-2026-07-25.bin) (`/dev/input/event2`),
+[`corners-pen-2026-07-25.bin`](corners-pen-2026-07-25.bin) (`/dev/input/event1`), taken simultaneously
+over SSH on firmware 1231. Decode either with [`decode.py`](decode.py):
+
+```bash
+python3 decode.py corners-touch-2026-07-25.bin touch
+python3 decode.py corners-pen-2026-07-25.bin pen
+```
+
+These are raw 16-byte `struct input_event` streams (`cat /dev/input/eventN`), not `evtest` text.
+`evtest`'s stdout is block-buffered when piped, and the SIGTERM that ends a capture discards whatever
+is still in the buffer — which is the last motion, usually the interesting one. `cat` uses plain
+read/write, so nothing is lost. That every capture is an exact multiple of 16 bytes also re-confirms
+the 32-bit ARM struct layout the parser assumes.
+
+### Method
+
+Earlier sessions tapped two **diagonal** corners, which cannot settle orientation: opposite corners
+look identical under a rotation *and* under a mirror. This capture used two corners of the **same
+edge**, so the vector between them identifies which raw axis runs horizontally and in which direction.
+Device held portrait, USB-C edge along the bottom; fingertip on top-left then top-right, then the pen
+tip on the same two corners in the same hold.
+
+### Result — both devices had been documented backwards
+
+| Corner | Touch (`event2`) | Pen (`event1`) |
+|---|---|---|
+| top-left | X ≈ 85, Y ≈ 1837 | X ≈ 20258, Y ≈ 672 |
+| top-right | X ≈ 1379, Y ≈ 1835 | X ≈ 20584, Y ≈ 15258 |
+
+- **Touch**: X is the short axis, 0 = **left** (as assumed). Y is the long axis, but **0 = bottom** —
+  Y stays at ≈ 1836 of 1871 all along the top edge. `INPUT_PROP_DIRECT` says the digitizer overlays a
+  display; it says nothing about which corner is the origin, and here the origin is the bottom-left.
+- **Pen**: ABS_X is the long axis with **0 = bottom** (USB edge) and max = top; ABS_Y is the short axis
+  with **0 = left** and max = right. Both axes are inverted relative to the old documentation, i.e.
+  the pen convention was 180° out.
+- Consequently pen and touch disagreed with each other by a horizontal mirror — a pen stroke on the
+  physical top-left corner landed at the screen's bottom-right while a finger on the same spot landed
+  bottom-left. The claim that the pen axes had been "re-verified against the touchscreen" was circular:
+  it inferred the pen from an unverified assumption about the panel's origin.
+
+Both mappers were corrected against these numbers, and the values above are pinned as test data in
+`CoordinateMapperTests` / `TouchCoordinateMapperTests`, including a cross-device test asserting that
+pen and touch land within 40 px of each other on the same physical corner.
+
+### Pen-proximity suppression abandons live contacts
+
+Same session, second phase: a fingertip was rested mid-screen and held, then the pen was brought into
+proximity while the finger stayed down.
+
+```
+touch contact id 84   down t=38.76   …   never released
+pen BTN_TOOL_PEN=1    at    t=44.56
+touch stream          silent from t=42.53 to the end of the capture
+```
+
+The firmware does **not** emit `ABS_MT_TRACKING_ID = -1` for a contact that is live when the pen
+arrives — it simply stops reporting, leaving the contact live forever from the host's point of view.
+Every other contact across both sessions was released cleanly, so this is specific to pen suppression.
+
+This is why `TouchStateMachine`'s stale-contact sweep exists, and why `PenProximityGate` releases the
+sink and suppresses live tracking IDs the moment the pen comes into range rather than waiting for a
+touch frame that will never arrive.
+
+> Caveat: silence from a suppressed panel and silence from a dead SSH stream look identical in a
+> capture. A follow-up run where the finger keeps moving after the pen withdraws would distinguish
+> them — if events resume, the stream was alive throughout.

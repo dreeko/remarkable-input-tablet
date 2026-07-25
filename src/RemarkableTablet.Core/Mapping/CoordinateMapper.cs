@@ -34,20 +34,21 @@ public sealed class CoordinateMapper
         var nx = ScreenTransform.Normalize(frame.X, _profile.Pen.XMin, _profile.Pen.XMax);
         var ny = ScreenTransform.Normalize(frame.Y, _profile.Pen.YMin, _profile.Pen.YMax);
 
-        // Apply orientation transform.
-        // rM2 pen axis layout (empirically aligned with touch panel 2026-05-07):
-        //   ABS_X is the LONG axis,  0 = top of device in portrait.
-        //   ABS_Y is the SHORT axis, 0 = right of device in portrait.
-        // These are 180° rotated from earlier documented conventions; the
-        // formulas below match the touch mapper's behavior so pen and touch
-        // agree on screen direction in every orientation.
+        // Orientation transform. rM2 pen axes, measured 2026-07-25 (see
+        // ReMarkable2Profile and samples/hw2-pen.log):
+        //   ABS_X is the LONG axis,  0 = bottom (USB edge), max = top.
+        //   ABS_Y is the SHORT axis, 0 = left,              max = right.
+        // So in the device's own portrait frame, left-to-right u = ny and
+        // top-to-bottom v = 1 - nx. Each case below is that (u, v) pair rotated
+        // by the orientation — the touch mapper derives its cases the same way
+        // from its own axes, which is what keeps pen and touch on the same pixel.
         var (rx, ry) = _opts.Orientation switch
         {
-            Orientation.Portrait => (1.0 - ny, nx),
-            Orientation.Landscape => (nx, ny),
-            Orientation.PortraitFlipped => (ny, 1.0 - nx),
-            Orientation.LandscapeFlipped => (1.0 - nx, 1.0 - ny),
-            _ => (1.0 - ny, nx)
+            Orientation.Portrait => (ny, 1.0 - nx),
+            Orientation.Landscape => (1.0 - nx, 1.0 - ny),
+            Orientation.PortraitFlipped => (1.0 - ny, nx),
+            Orientation.LandscapeFlipped => (nx, ny),
+            _ => (ny, 1.0 - nx)
         };
 
         // Active-area crop, aspect fit and screen scaling — shared with touch.
@@ -90,18 +91,23 @@ public sealed class CoordinateMapper
     ///     Tilt-X in the tablet's frame is no longer tilt-X in the screen's frame once
     ///     the device is rotated; brushes that key off tilt direction would otherwise
     ///     be wrong in non-Portrait orientations.
-    ///     Sign convention follows Windows Ink (positive = pen leans toward +X / +Y axis).
-    ///     Convention may need empirical adjustment — see README "Hardware details".
+    ///     <para>
+    ///         Derived from the measured axis directions, not chosen: +ABS_TILT_Y
+    ///         leans along +ABS_Y, which points right (screen +X in portrait), and
+    ///         +ABS_TILT_X leans along +ABS_X, which points up (screen −Y). Each
+    ///         case is that pair rotated with the position transform. Sign
+    ///         convention follows Windows Ink (positive = pen leans toward +X / +Y).
+    ///     </para>
     /// </summary>
     private static (int X, int Y) RotateTilt(int tx, int ty, Orientation o)
     {
         return o switch
         {
-            Orientation.Portrait => (-ty, tx),
-            Orientation.Landscape => (tx, ty),
-            Orientation.PortraitFlipped => (ty, -tx),
-            Orientation.LandscapeFlipped => (-tx, -ty),
-            _ => (-ty, tx)
+            Orientation.Portrait => (ty, -tx),
+            Orientation.Landscape => (-tx, -ty),
+            Orientation.PortraitFlipped => (-ty, tx),
+            Orientation.LandscapeFlipped => (tx, ty),
+            _ => (ty, -tx)
         };
     }
 }

@@ -49,16 +49,19 @@ public sealed class TouchCoordinateMapper
         var nx = ScreenTransform.Normalize(c.X, _profile.Touch.XMin, _profile.Touch.XMax);
         var ny = ScreenTransform.Normalize(c.Y, _profile.Touch.YMin, _profile.Touch.YMax);
 
-        // Touch panel native frame: portrait — short axis = X, long axis = Y,
-        // pen slot at the bottom. So unlike the pen, no axis swap is needed
-        // for portrait.
+        // rM2 touch axes, measured 2026-07-25 (see ReMarkable2Profile and
+        // samples/hw2-touch.log): X is the short axis with 0 = left, Y is the long
+        // axis with 0 = BOTTOM. INPUT_PROP_DIRECT does not mean the origin matches
+        // the display's — here it doesn't, and assuming it did put every stroke on
+        // the wrong half of the screen vertically.
+        // Device portrait frame: u = nx, v = 1 - ny; each case is that pair rotated.
         var (rx, ry) = _opts.Orientation switch
         {
-            Orientation.Portrait => (nx, ny),
-            Orientation.Landscape => (ny, 1.0 - nx),
-            Orientation.PortraitFlipped => (1.0 - nx, 1.0 - ny),
-            Orientation.LandscapeFlipped => (1.0 - ny, nx),
-            _ => (nx, ny)
+            Orientation.Portrait => (nx, 1.0 - ny),
+            Orientation.Landscape => (1.0 - ny, 1.0 - nx),
+            Orientation.PortraitFlipped => (1.0 - nx, ny),
+            Orientation.LandscapeFlipped => (ny, nx),
+            _ => (nx, 1.0 - ny)
         };
 
         var (sx, sy) = _transform.ToScreen(rx, ry);
