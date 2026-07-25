@@ -38,6 +38,12 @@ public static class ReMarkable2Profile
             0, 1871,
             0, 255,
             32, 5),
-        PenSuppressesTouch = true
+
+        // 1404 × 1872 px at 226 dpi ⇒ 157.8 × 210.4 mm; the pen digitizer
+        // agrees independently (20966 / 15725 ticks at the declared 100
+        // ticks/mm ⇒ 209.7 × 157.3 mm), so the two axes are within half a
+        // millimetre of each other. Used for aspect-correct screen fitting
+        // and for the virtual pen device's declared resolution.
+        Surface = new ActiveArea(157.5, 210.0)
     };
 }

@@ -19,6 +19,13 @@ public sealed class AppSettings
 
     public string Host { get; set; } = "10.11.99.1";
     public string Orientation { get; set; } = "Portrait";
+
+    /// <summary>
+    ///     "crop" (default, aspect-correct), "letterbox", or "stretch". The tablet
+    ///     is 3:4, so stretching it to a 16:9 screen distorts strokes.
+    /// </summary>
+    public string Fit { get; set; } = "crop";
+
     public int MonitorIndex { get; set; }
     public string OutputMode { get; set; } = "ink";
     public bool AutoConnect { get; set; }

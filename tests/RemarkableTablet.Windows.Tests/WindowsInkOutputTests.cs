@@ -26,6 +26,7 @@ public class WindowsInkOutputTests
             100, 100,
             0,
             0, 0,
+            30,
             false, false,
             false, true);
 
@@ -39,9 +40,9 @@ public class WindowsInkOutputTests
         using var output = new WindowsInkOutput();
         output.Initialize();
 
-        var hover = new MappedFrame(100, 100, 0, 0, 0, false, false, false, true);
-        var touch = new MappedFrame(100, 100, 512, 0, 0, true, false, false, true);
-        var lift = new MappedFrame(100, 100, 0, 0, 0, false, false, false, true);
+        var hover = new MappedFrame(100, 100, 0, 0, 0, 30, false, false, false, true);
+        var touch = new MappedFrame(100, 100, 512, 0, 0, 0, true, false, false, true);
+        var lift = new MappedFrame(100, 100, 0, 0, 0, 10, false, false, false, true);
 
         output.Send(hover);
         output.Send(touch);
@@ -53,7 +54,7 @@ public class WindowsInkOutputTests
     {
         var output = new WindowsInkOutput();
         output.Initialize();
-        output.Send(new MappedFrame(200, 200, 800, 0, 0, true, false, false, true));
+        output.Send(new MappedFrame(200, 200, 800, 0, 0, 0, true, false, false, true));
         // Dispose should emit pen-up cleanly
         var ex = Record.Exception(() => output.Dispose());
         Assert.Null(ex);

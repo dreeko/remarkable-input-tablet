@@ -9,6 +9,9 @@ public class CoordinateMapperTests
 {
     private static readonly DeviceProfile Rm2 = ReMarkable2Profile.Instance;
 
+    // Stretch, because these tests are about the orientation/tilt rotation: the
+    // full surface must reach the full screen for a corner assertion to mean
+    // anything. Aspect fitting is covered by ScreenTransformTests.
     private static CoordinateMapper MakeMapper(Orientation orientation, int monW = 1920, int monH = 1080)
     {
         var opts = new MappingOptions
@@ -17,7 +20,8 @@ public class CoordinateMapperTests
             MonitorY = 0,
             MonitorW = monW,
             MonitorH = monH,
-            Orientation = orientation
+            Orientation = orientation,
+            Fit = FitMode.Stretch
         };
         return new CoordinateMapper(opts, Rm2, PressureCurve.Linear);
     }
@@ -26,9 +30,41 @@ public class CoordinateMapperTests
         int x, int y,
         int pressure = 0,
         int tiltX = 0, int tiltY = 0,
-        bool touch = false, bool inRange = true)
+        bool touch = false, bool inRange = true,
+        int distance = 0)
     {
-        return new PenFrame(x, y, pressure, tiltX, tiltY, 0, touch, false, false, false, inRange);
+        return new PenFrame(x, y, pressure, tiltX, tiltY, distance, touch, false, false, false, inRange);
+    }
+
+    [Fact]
+    public void HoverDistance_IsCarriedToTheMappedFrame()
+    {
+        // Parsed off ABS_DISTANCE and forwarded to the virtual pen device — apps
+        // like Krita and GIMP use it for hover feedback.
+        var mapped = MakeMapper(Orientation.Portrait).Map(MakeFrame(0, 0, distance: 42));
+        Assert.Equal(42, mapped.Distance);
+    }
+
+    [Fact]
+    public void PenAndTouch_AgreeOnTheSamePhysicalPoint()
+    {
+        // The two mappers are a matched pair: the same physical spot must land on
+        // the same pixel, in every orientation, or drawing and gestures disagree.
+        foreach (var o in Enum.GetValues<Orientation>())
+        {
+            var opts = MappingOptions.ForScreen(1920, 1080, o);
+            var pen = new CoordinateMapper(opts, Rm2, PressureCurve.Linear);
+            var touch = new TouchCoordinateMapper(opts, Rm2, pen.Transform);
+
+            // Physical centre of the surface, expressed in each device's axes.
+            var penPoint = pen.Map(MakeFrame(Rm2.Pen.XMax / 2, Rm2.Pen.YMax / 2));
+            var touchFrame = touch.Map(new TouchFrame([
+                new TouchContact(0, 1, Rm2.Touch.XMax / 2, Rm2.Touch.YMax / 2, 0, 0, 0, 0, 0)
+            ]));
+
+            Assert.InRange(Math.Abs(penPoint.ScreenX - touchFrame.Contacts[0].ScreenX), 0, 2);
+            Assert.InRange(Math.Abs(penPoint.ScreenY - touchFrame.Contacts[0].ScreenY), 0, 2);
+        }
     }
 
     [Fact]

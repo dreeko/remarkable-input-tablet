@@ -40,6 +40,7 @@ var orientation = GetArg(args, "--orientation", "portrait")!;
 var outputMode = GetArg(args, "--output", "ink")!;
 var gestures = GetArg(args, "--gestures", "off")!;
 var pressure = GetArg(args, "--pressure", "linear")!;
+var fitArg = GetArg(args, "--fit", "crop")!;
 var deviceArg = GetArg(args, "--device", "auto")!;
 var debug = args.Contains("--debug");
 
@@ -128,7 +129,14 @@ else
     Console.WriteLine($"Using profile: {profile.Name}");
 }
 
-var mappingOpts = MappingOptions.ForScreen(screenW, screenH, orient);
+var fit = fitArg.ToLowerInvariant() switch
+{
+    "stretch" => FitMode.Stretch,
+    "letterbox" => FitMode.Letterbox,
+    _ => FitMode.Crop
+};
+
+var mappingOpts = MappingOptions.ForScreen(screenW, screenH, orient, fit);
 var curve = PressureCurve.FromName(pressure);
 var mapper = new CoordinateMapper(mappingOpts, profile, curve);
 
@@ -136,7 +144,7 @@ IOutputMode output;
 #if WINDOWS_PLATFORM
 output = outputMode == "mouse" ? new MouseOutput() : new WindowsInkOutput();
 #elif LINUX_PLATFORM
-output = new UinputOutput(screenW, screenH, profile.Pen);
+output = new UinputOutput(screenW, screenH, mapper.Transform, profile.Pen);
 #endif
 
 // Touch wiring — currently only `touch` mode and only on Linux. Windows
@@ -145,7 +153,8 @@ TouchCoordinateMapper? touchMapper = null;
 ITouchOutput? touchOutput = null;
 if (gestures == "touch")
 {
-    touchMapper = new TouchCoordinateMapper(mappingOpts, profile);
+    // Share the pen's fitted geometry so pen and touch land on the same pixel.
+    touchMapper = new TouchCoordinateMapper(mappingOpts, profile, mapper.Transform);
 #if LINUX_PLATFORM
     touchOutput = new UinputTouchOutput(screenW, screenH, profile.Touch.MaxTracked);
 #elif WINDOWS_PLATFORM
@@ -187,7 +196,8 @@ Console.CancelKeyPress += (_, e) =>
     pipeline.Stop();
 };
 
-Console.WriteLine($"Connecting to {address} ({orient} orientation, {screenW}×{screenH})...");
+Console.WriteLine(
+    $"Connecting to {address} ({orient} orientation, {fit} fit, {screenW}×{screenH})...");
 Console.WriteLine("Press Ctrl-C to stop.");
 
 if (debug)
@@ -200,6 +210,14 @@ try
 catch (Exception ex)
 {
     return ReportFatal(ex, debug);
+}
+
+if (debug && touchOutput is not null)
+{
+    var stats = pipeline.TouchStats;
+    Console.WriteLine(
+        $"[debug] touch: {stats.DroppedContacts} contact(s) dropped, " +
+        $"{stats.StaleReleases} stale release(s), {stats.PenGateClosures} pen-gate closure(s)");
 }
 
 return 0;
@@ -221,7 +239,7 @@ static string? ValidateArgs(string[] values)
     var valueFlags = new HashSet<string>(StringComparer.Ordinal)
     {
         "--address", "--password", "--key", "--orientation", "--output",
-        "--gestures", "--pressure", "--device", "--width", "--height"
+        "--gestures", "--pressure", "--device", "--width", "--height", "--fit"
     };
     var switchFlags = new HashSet<string>(StringComparer.Ordinal) { "--debug" };
     var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -251,6 +269,10 @@ static string? ValidateArgs(string[] values)
     if (!OneOf(orientationValue, "portrait", "landscape", "portraitflipped", "landscapeflipped"))
         return
             $"invalid --orientation '{orientationValue}'; expected portrait, landscape, portraitflipped, or landscapeflipped.";
+
+    var fitValue = GetArg(values, "--fit", "crop")!;
+    if (!OneOf(fitValue, "crop", "letterbox", "stretch"))
+        return $"invalid --fit '{fitValue}'; expected crop, letterbox, or stretch.";
 
     var pressureValue = GetArg(values, "--pressure", "linear")!;
     if (!OneOf(pressureValue, "linear", "soft", "hard"))
@@ -309,6 +331,7 @@ static void PrintUsage(TextWriter writer)
     writer.WriteLine();
     writer.WriteLine("Mapping:");
     writer.WriteLine("  --orientation <value>  portrait, landscape, portraitflipped, or landscapeflipped");
+    writer.WriteLine("  --fit <value>          crop (default, aspect-correct), letterbox, or stretch");
     writer.WriteLine("  --pressure <value>     linear, soft, or hard (default: linear)");
     writer.WriteLine("  --gestures <value>     off or touch (default: off)");
     writer.WriteLine("  --width <px>           Override detected screen width; requires --height");

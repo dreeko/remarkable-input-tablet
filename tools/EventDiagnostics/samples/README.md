@@ -34,7 +34,11 @@ separately).
 
 2. **`ABS_MT_TOOL_TYPE` is reported.** Range 0–1. `MT_TOOL_FINGER = 0`, `MT_TOOL_PEN = 1` per the kernel — though for an
    `pt_mt` capacitive sensor "pen" likely means "stylus-like contact size" rather than the actual Wacom pen (which is on
-   event1). Worth a follow-up evtest: rest a palm and watch whether tool type flips to 1.
+   event1).
+   **Resolved (2026-07-25, from the header above + kernel `linux/input.h`):** this panel *cannot* report a palm. The
+   kernel values are `MT_TOOL_FINGER 0x00`, `MT_TOOL_PEN 0x01`, `MT_TOOL_PALM 0x02`, and the declared axis maximum here
+   is 1 — so 2 is out of range and the "rest a palm and watch for a flip" follow-up has no possible positive outcome.
+   Contact size (`ABS_MT_TOUCH_MAJOR` / `MINOR`) is the only palm signal this device offers.
 
 3. **32 slots** is far more than necessary. We will cap our `TouchMaxContacts` at a sensible value (5 is plenty for
    two-finger gestures plus palm contacts). The slot index space is sparse; we don't allocate per-slot storage for all
@@ -105,10 +109,33 @@ Specifically:
   firmware did not suppress, the resting finger would have generated a multi-second contact. It did not.
 - Touch events resumed only after the pen was set aside.
 
-**Implication for the implementation plan:** the host-side `PenToolGate` is a defense-in-depth feature, not a
+**Implication for the implementation plan:** the host-side pen gate is a defense-in-depth feature, not a
 load-bearing requirement. The firmware already enforces "pen takes priority over touch" at the source. Users will *not*
 be able to "draw + pinch with off-hand simultaneously" — that's a hardware-level UX constraint, not a software gap. The
 workflow is "lift pen → pinch/pan → resume drawing."
+
+### Gap in this conclusion (noted 2026-07-25)
+
+The suppression is inferred from silence, and the capture does **not** cover the case that matters most for palm
+rejection: a contact already down when the pen *arrives*. Every contact in this log is explicitly released (`tid=-1` at
+`1778125841.028023`) *before* the 10.7 s quiet window — the palm was lifted first, then the pen approached. So we still
+don't know whether the firmware releases in-flight contacts or just stops reporting them. If it just stops, the host
+would hold that contact indefinitely without the stale-contact sweep.
+
+**To close it:** `evtest /dev/input/event2`, rest a palm, then bring the pen into proximity, and watch whether
+`ABS_MT_TRACKING_ID = -1` appears at the moment the stream goes quiet.
+
+### Report cadence while a contact is held (measured 2026-07-25)
+
+Inter-`SYN_REPORT` gaps with at least one contact active — this bounds how aggressive any staleness timeout can be:
+
+| Capture            | p50     | p95     | max         |
+|--------------------|---------|---------|-------------|
+| `touch-header.log` (active two-finger motion) | 11.8 ms | 11.9 ms | 70 ms       |
+| `touch-pen.log` (palm rest, mostly still)     | 11.8 ms | 86 ms   | **1085 ms** |
+
+The panel reports on change, so a motionless contact can be quiet for over a second. Any per-contact timeout must sit
+well above that — `TouchOptions.StaleContactMs` defaults to 3 s for this reason, with the pen gate as the fast path.
 
 ## Plan adjustments based on what we learned
 

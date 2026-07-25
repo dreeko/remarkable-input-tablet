@@ -11,7 +11,8 @@ namespace RemarkableTablet.Core.Pipeline;
 /// <summary>
 ///     Wires all pipeline stages together and owns the CancellationTokenSource.
 ///     Pen pipeline:   SshTransport(event1) → EvdevParser → TabletStateMachine → CoordinateMapper → IOutputMode
-///     Touch pipeline: SshTransport(event2) → EvdevParser → TouchStateMachine → TouchCoordinateMapper → ITouchOutput
+///     Touch pipeline: SshTransport(event2) → EvdevParser → TouchStateMachine → TouchCoordinateMapper →
+///     PenProximityGate → ITouchOutput
 ///     (touch wiring is optional — pen-only operation is unchanged)
 ///     Reconnects automatically on disconnect with exponential backoff.
 ///     Emits a synthetic pen-up and "all touch contacts released" before each
@@ -24,13 +25,24 @@ public sealed class TabletPipeline : IAsyncDisposable
 {
     private static readonly int[] BackoffSeconds = [1, 2, 4, 8, 16, 30];
     private readonly CancellationTokenSource _cts = new();
+    private readonly PenProximityGate _gate = new();
+
+    // Serialises access to the touch sink: reached from both output loops.
+    private readonly object _touchSink = new();
     private readonly CoordinateMapper _mapper;
     private readonly IOutputMode _output;
     private readonly DeviceProfile _profile;
+    private readonly TouchOptions _touchOptions;
+
     private readonly TouchCoordinateMapper? _touchMapper;
     private readonly ITouchOutput? _touchOutput;
 
     private readonly SshTransport _transport;
+
+    // Counters from state machines of earlier connections, so the totals survive
+    // a reconnect.
+    private TouchDiagnostics _retiredTouchStats = new(0, 0, 0);
+    private TouchStateMachine? _touchStateMachine;
 
     public TabletPipeline(
         SshTransport transport,
@@ -47,7 +59,8 @@ public sealed class TabletPipeline : IAsyncDisposable
         CoordinateMapper mapper,
         IOutputMode output,
         TouchCoordinateMapper? touchMapper,
-        ITouchOutput? touchOutput)
+        ITouchOutput? touchOutput,
+        TouchOptions? touchOptions = null)
     {
         _transport = transport;
         _profile = profile;
@@ -55,6 +68,7 @@ public sealed class TabletPipeline : IAsyncDisposable
         _mapper = mapper;
         _touchMapper = touchMapper;
         _touchOutput = touchOutput;
+        _touchOptions = touchOptions ?? TouchOptions.ForProfile(profile);
 
         _transport.StateChanged += s => ConnectionStateChanged?.Invoke(s);
     }
@@ -66,6 +80,26 @@ public sealed class TabletPipeline : IAsyncDisposable
         _output.Dispose();
         _touchOutput?.Dispose();
         _cts.Dispose();
+    }
+
+    /// <summary>
+    ///     Palm-rejection and slot-pool counters, cumulative across reconnects.
+    ///     All three should normally be low; a climbing
+    ///     <see cref="TouchDiagnostics.DroppedContacts" /> means contacts are being
+    ///     filtered or the slot pool is saturating, and a climbing
+    ///     <see cref="TouchDiagnostics.StaleReleases" /> means the firmware is
+    ///     abandoning contacts without releasing them.
+    /// </summary>
+    public TouchDiagnostics TouchStats
+    {
+        get
+        {
+            var sm = _touchStateMachine;
+            return new TouchDiagnostics(
+                _retiredTouchStats.DroppedContacts + (sm?.DroppedContacts ?? 0),
+                _retiredTouchStats.StaleReleases + (sm?.StaleReleases ?? 0),
+                _gate.CloseCount);
+        }
     }
 
     public event Action<ConnectionState>? ConnectionStateChanged;
@@ -173,12 +207,35 @@ public sealed class TabletPipeline : IAsyncDisposable
                 SingleWriter = true
             });
 
+            // Held so its counters can be read for diagnostics; a fresh one per
+            // connection, with the retired totals folded into _retiredTouchStats.
+            var touchSm = new TouchStateMachine(_touchOptions);
+            _touchStateMachine = touchSm;
+
             tasks.Add(EvdevParser.RunAsync(touchStream.Reader, touchEvdevChannel.Writer, _profile.EventLayout, ct));
-            tasks.Add(TouchStateMachine.RunAsync(touchEvdevChannel.Reader, touchFrameChannel.Writer, ct));
+            tasks.Add(touchSm.RunLoopAsync(touchEvdevChannel.Reader, touchFrameChannel.Writer, ct));
             tasks.Add(TouchOutputLoopAsync(touchFrameChannel.Reader, ct));
         }
 
-        await Task.WhenAll(tasks);
+        try
+        {
+            await Task.WhenAll(tasks);
+        }
+        finally
+        {
+            RetireTouchStats();
+        }
+    }
+
+    private void RetireTouchStats()
+    {
+        var sm = _touchStateMachine;
+        if (sm is null) return;
+        _retiredTouchStats = new TouchDiagnostics(
+            _retiredTouchStats.DroppedContacts + sm.DroppedContacts,
+            _retiredTouchStats.StaleReleases + sm.StaleReleases,
+            0);
+        _touchStateMachine = null;
     }
 
     private async Task PenOutputLoopAsync(ChannelReader<PenFrame> frames, CancellationToken ct)
@@ -186,7 +243,18 @@ public sealed class TabletPipeline : IAsyncDisposable
         try
         {
             await foreach (var frame in frames.ReadAllAsync(ct))
-                _output.Send(_mapper.Map(frame));
+            {
+                var mapped = _mapper.Map(frame);
+
+                // Palm rejection is driven from here, not from the touch loop:
+                // when the pen enters proximity the panel goes quiet, so the touch
+                // loop may not run again until long after the release is needed.
+                _gate.OnPenFrame(mapped);
+                if (_touchOutput is not null && _gate.TakePendingRelease())
+                    ReleaseTouchContacts();
+
+                _output.Send(mapped);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -198,10 +266,38 @@ public sealed class TabletPipeline : IAsyncDisposable
         try
         {
             await foreach (var frame in frames.ReadAllAsync(ct))
-                _touchOutput!.Send(_touchMapper!.Map(frame));
+            {
+                var mapped = _touchMapper!.Map(frame);
+
+                // Second half of the gate: for a device that keeps reporting touch
+                // while the pen is down, drop those frames here too. The release
+                // itself is the pen loop's job — see PenProximityGate.
+                var gated = _gate.Filter(mapped);
+                if (gated is null) continue;
+
+                lock (_touchSink)
+                {
+                    _touchOutput!.Send(gated);
+                }
+            }
         }
         catch (OperationCanceledException)
         {
+        }
+    }
+
+    /// <summary>
+    ///     Drop every contact the touch sink is holding. Both loops can reach the
+    ///     sink — the pen loop on gate closure, the touch loop on every frame — and
+    ///     no <see cref="ITouchOutput" /> implementation is thread-safe (each keeps
+    ///     per-slot state and writes a device handle), hence the shared lock.
+    /// </summary>
+    private void ReleaseTouchContacts()
+    {
+        if (_touchOutput is null) return;
+        lock (_touchSink)
+        {
+            _touchOutput.ReleaseAll();
         }
     }
 
@@ -209,7 +305,7 @@ public sealed class TabletPipeline : IAsyncDisposable
     {
         try
         {
-            _output.Send(new MappedFrame(0, 0, 0, 0, 0,
+            _output.Send(new MappedFrame(0, 0, 0, 0, 0, 0,
                 false, false, false, false));
         }
         catch (Exception ex)
@@ -220,10 +316,9 @@ public sealed class TabletPipeline : IAsyncDisposable
 
     private void EmitTouchReleaseAll()
     {
-        if (_touchOutput is null) return;
         try
         {
-            _touchOutput.ReleaseAll();
+            ReleaseTouchContacts();
         }
         catch (Exception ex)
         {

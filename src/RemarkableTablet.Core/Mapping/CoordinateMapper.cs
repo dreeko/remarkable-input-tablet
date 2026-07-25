@@ -19,13 +19,20 @@ public sealed class CoordinateMapper
         _opts = opts;
         _profile = profile;
         _curve = curve ?? PressureCurve.Linear;
+        Transform = new ScreenTransform(opts, profile);
     }
+
+    /// <summary>
+    ///     Shared screen-side transform. Exposed so the touch mapper and the
+    ///     Linux uinput device can be built from the same fitted geometry.
+    /// </summary>
+    public ScreenTransform Transform { get; }
 
     public MappedFrame Map(PenFrame frame)
     {
-        // Normalise raw tablet coords to [0,1]
-        var nx = frame.X / (double)_profile.Pen.XMax;
-        var ny = frame.Y / (double)_profile.Pen.YMax;
+        // Normalise raw tablet coords to [0,1] against the declared axis range.
+        var nx = ScreenTransform.Normalize(frame.X, _profile.Pen.XMin, _profile.Pen.XMax);
+        var ny = ScreenTransform.Normalize(frame.Y, _profile.Pen.YMin, _profile.Pen.YMax);
 
         // Apply orientation transform.
         // rM2 pen axis layout (empirically aligned with touch panel 2026-05-07):
@@ -43,18 +50,12 @@ public sealed class CoordinateMapper
             _ => (1.0 - ny, nx)
         };
 
-        // Apply tablet area crop (user-selected active region)
-        rx = _opts.TabletAreaX + rx * _opts.TabletAreaW;
-        ry = _opts.TabletAreaY + ry * _opts.TabletAreaH;
-        rx = Math.Clamp(rx, 0.0, 1.0);
-        ry = Math.Clamp(ry, 0.0, 1.0);
-
-        // Map to screen pixels
-        var sx = _opts.MonitorX + (int)(rx * Math.Max(0, _opts.MonitorW - 1));
-        var sy = _opts.MonitorY + (int)(ry * Math.Max(0, _opts.MonitorH - 1));
+        // Active-area crop, aspect fit and screen scaling — shared with touch.
+        var (sx, sy) = Transform.ToScreen(rx, ry);
 
         // Pressure: tablet raw → normalised → curve → Windows 0–1024
-        var normPressure = frame.Pressure / (double)_profile.Pen.PressureMax;
+        var normPressure = ScreenTransform.Normalize(
+            frame.Pressure, _profile.Pen.PressureMin, _profile.Pen.PressureMax);
         var wPressure = (uint)(_curve.Apply(normPressure) * InjectionScale.PressureMax);
 
         // Tilt: firmware units → degrees ±90, then rotated to match the position transform.
@@ -68,6 +69,7 @@ public sealed class CoordinateMapper
             wPressure,
             tiltX,
             tiltY,
+            frame.Distance,
             frame.IsTouch,
             frame.IsEraser,
             frame.BarrelButton1,

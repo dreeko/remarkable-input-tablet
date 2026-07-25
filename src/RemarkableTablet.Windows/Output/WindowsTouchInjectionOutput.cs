@@ -175,6 +175,12 @@ public sealed class WindowsTouchInjectionOutput : ITouchOutput
                     ptPixelLocation = new POINT { X = x, Y = y },
                     ptPixelLocationRaw = new POINT { X = x, Y = y }
                 },
+                // No ContactArea: rcContact is a screen-pixel rectangle, and the
+                // source panel's ABS_MT_TOUCH_MAJOR/MINOR units are unknown (see
+                // MappedTouchContact). Publishing a fabricated contact rect would
+                // feed host apps' own palm rejection with invented sizes, which is
+                // worse than giving them none. Populate this once a calibration
+                // capture pins the unit down.
                 touchFlags = TouchFlags.None,
                 touchMask = TouchMask.Pressure,
                 pressure = pressure

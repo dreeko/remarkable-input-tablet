@@ -57,17 +57,25 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <Label Grid.Row="0" Grid.Column="0" Content="Orientation:" VerticalAlignment="Center" />
                 <ComboBox Grid.Row="0" Grid.Column="1" x:Name="OrientationBox" Margin="0,2"
                           SelectedIndex="0">
-                    <ComboBoxItem>Portrait (default)</ComboBoxItem>
-                    <ComboBoxItem>Landscape</ComboBoxItem>
-                    <ComboBoxItem>Portrait Flipped</ComboBoxItem>
-                    <ComboBoxItem>Landscape Flipped</ComboBoxItem>
+                    <ComboBoxItem>Portrait — USB-C port at bottom (default)</ComboBoxItem>
+                    <ComboBoxItem>Landscape — USB-C port on right</ComboBoxItem>
+                    <ComboBoxItem>Portrait Flipped — USB-C port at top</ComboBoxItem>
+                    <ComboBoxItem>Landscape Flipped — USB-C port on left</ComboBoxItem>
                 </ComboBox>
-                <Label Grid.Row="1" Grid.Column="0" Content="Monitor:" VerticalAlignment="Center" />
-                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="MonitorBox" Margin="0,2" />
+                <Label Grid.Row="1" Grid.Column="0" Content="Aspect:" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="FitBox" Margin="0,2"
+                          SelectedIndex="0">
+                    <ComboBoxItem>Crop tablet to screen shape (default)</ComboBoxItem>
+                    <ComboBoxItem>Letterbox — use whole tablet, part of screen</ComboBoxItem>
+                    <ComboBoxItem>Stretch — full screen, distorts strokes</ComboBoxItem>
+                </ComboBox>
+                <Label Grid.Row="2" Grid.Column="0" Content="Monitor:" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="2" Grid.Column="1" x:Name="MonitorBox" Margin="0,2" />
             </Grid>
         </GroupBox>
 

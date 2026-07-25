@@ -59,11 +59,11 @@ public static class ReMarkablePaperProProfile
             0, 255,
             32, 5),
 
-        // TODO(rmpp-phase0): reMarkable markets palm rejection on rMPP but
-        // does not specify the mechanism. If touch events flow while the
-        // pen is in proximity, a host-side pen-tool gate is required.
-        // Verify by streaming event2 + event3 simultaneously and hovering
-        // the pen.
-        PenSuppressesTouch = true
+        // TODO(rmpp-phase0): 1620 × 2160 px at ~229 dpi (11.8" diagonal)
+        // ⇒ 179.7 × 239.6 mm. Derived from the marketed display size, not
+        // measured. The pen "resolution" values above are not ticks/mm
+        // (11180 / 2832 would be a 4 mm surface), so they cannot corroborate
+        // this the way the rM2's do.
+        Surface = new ActiveArea(179.7, 239.6)
     };
 }

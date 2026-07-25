@@ -13,17 +13,24 @@ namespace RemarkableTablet.Core.Mapping;
 ///     ABS_MT_POSITION_Y is the LONG axis  (0..1871).
 ///     This is *opposite* to the pen, where ABS_X is the long axis. The
 ///     orientation rotation cases below account for that — they are not
-///     copy-paste of the pen mapper.
+///     copy-paste of the pen mapper. Everything after the rotation is shared
+///     with the pen via <see cref="ScreenTransform" />.
 /// </summary>
 public sealed class TouchCoordinateMapper
 {
     private readonly MappingOptions _opts;
     private readonly DeviceProfile _profile;
+    private readonly ScreenTransform _transform;
 
-    public TouchCoordinateMapper(MappingOptions opts, DeviceProfile profile)
+    /// <param name="transform">
+    ///     Pass the pen mapper's <see cref="CoordinateMapper.Transform" /> so pen
+    ///     and touch share one fitted geometry; omit to build an equivalent one.
+    /// </param>
+    public TouchCoordinateMapper(MappingOptions opts, DeviceProfile profile, ScreenTransform? transform = null)
     {
         _opts = opts;
         _profile = profile;
+        _transform = transform ?? new ScreenTransform(opts, profile);
     }
 
     public MappedTouchFrame Map(TouchFrame frame)
@@ -39,8 +46,8 @@ public sealed class TouchCoordinateMapper
     private MappedTouchContact MapContact(TouchContact c)
     {
         // Normalise raw touch coords to [0,1] in the panel's own frame.
-        var nx = c.X / (double)_profile.Touch.XMax;
-        var ny = c.Y / (double)_profile.Touch.YMax;
+        var nx = ScreenTransform.Normalize(c.X, _profile.Touch.XMin, _profile.Touch.XMax);
+        var ny = ScreenTransform.Normalize(c.Y, _profile.Touch.YMin, _profile.Touch.YMax);
 
         // Touch panel native frame: portrait — short axis = X, long axis = Y,
         // pen slot at the bottom. So unlike the pen, no axis swap is needed
@@ -54,19 +61,16 @@ public sealed class TouchCoordinateMapper
             _ => (nx, ny)
         };
 
-        // Apply tablet area crop, identical to pen mapper.
-        rx = _opts.TabletAreaX + rx * _opts.TabletAreaW;
-        ry = _opts.TabletAreaY + ry * _opts.TabletAreaH;
-        rx = Math.Clamp(rx, 0.0, 1.0);
-        ry = Math.Clamp(ry, 0.0, 1.0);
-
-        var sx = _opts.MonitorX + (int)(rx * Math.Max(0, _opts.MonitorW - 1));
-        var sy = _opts.MonitorY + (int)(ry * Math.Max(0, _opts.MonitorH - 1));
+        var (sx, sy) = _transform.ToScreen(rx, ry);
 
         // Pressure: device raw → 0..1024 (Windows Ink scale).
-        var pressureNorm = c.Pressure / (double)_profile.Touch.PressureMax;
+        var pressureNorm = ScreenTransform.Normalize(
+            c.Pressure, _profile.Touch.PressureMin, _profile.Touch.PressureMax);
         var pressure = (uint)(pressureNorm * InjectionScale.PressureMax);
 
-        return new MappedTouchContact(c.Slot, c.TrackingId, sx, sy, pressure);
+        // Contact size passes through in raw device units — see
+        // MappedTouchContact for why it is not converted to millimetres.
+        return new MappedTouchContact(
+            c.Slot, c.TrackingId, sx, sy, pressure, c.TouchMajor, c.TouchMinor);
     }
 }

@@ -74,11 +74,12 @@ For unattended use, prefer `--key ~/.ssh/id_ed25519` over putting a password in 
 | `--password <pw>` | — | Root password (required unless `--key` is set) |
 | `--key <path>` | — | Path to SSH private key file |
 | `--address <host>` | `10.11.99.1` | Device IP address or hostname |
-| `--orientation <value>` | `portrait` | `portrait`, `landscape`, `portraitflipped`, `landscapeflipped` |
+| `--orientation <value>` | `portrait` | `portrait`, `landscape`, `portraitflipped`, `landscapeflipped` — named by where the USB-C port sits |
+| `--fit <value>` | `crop` | Aspect handling. `crop` (use a centred strip of the tablet matching the screen's shape — whole screen reachable, no distortion), `letterbox` (use the whole tablet, map to a centred part of the screen), or `stretch` (full tablet to full screen, distorts strokes) |
 | `--output <value>` | `ink` | `ink` (full pressure+tilt) or `mouse` (cursor only, Windows only) |
 | `--width <px>` | auto | Positive screen width in pixels; must be used with `--height` |
 | `--height <px>` | auto | Positive screen height in pixels; must be used with `--width` |
-| `--debug` | off | Print pipeline stage info on startup |
+| `--debug` | off | Print pipeline stage info on startup, and touch counters on exit (contacts dropped, stale releases, pen-gate closures) |
 | `--gestures <value>` | `off` | `touch` (inject multi-touch contacts for pinch / pan / rotate) or `off`. The rM2 firmware suppresses touch while the pen is in proximity, so two-finger gestures only register when the pen is set aside. |
 | `--pressure <value>` | `linear` | Pressure response curve. `linear` (1:1), `soft` (boosts light strokes — pen feels lighter), or `hard` (suppresses light strokes — pen feels stiffer). |
 | `--device <value>` | `auto` | `auto` (probe via `uname -m`), `rm2`, or `rmpp`. Auto-detect runs a short SSH command before the streaming pipeline starts; force a specific profile only if detection fails. |
@@ -89,14 +90,31 @@ Option names are case-sensitive; enumerated values are case-insensitive. Unknown
 
 ## Orientation
 
-Hold the tablet with the **pen slot at the bottom** for portrait (default). Orientation controls how the tablet's native coordinate space maps to the screen:
+Orientations are named by where the **USB-C port** ends up — the port is on a short
+edge, so it identifies the rotation unambiguously. (Earlier docs said "pen slot at the
+bottom", which is wrong: the Marker attaches magnetically to a *long* edge, so
+following that literally left you holding the tablet 90° away from what the code
+assumes.)
 
 | Value | Physical position |
 |-------|-------------------|
-| `portrait` | Pen slot at bottom (default drawing position) |
-| `landscape` | Pen slot on right |
-| `portraitflipped` | Pen slot at top |
-| `landscapeflipped` | Pen slot on left |
+| `portrait` | USB-C port at the bottom (default drawing position) |
+| `landscape` | Portrait rotated 90° counter-clockwise — USB-C port on the right |
+| `portraitflipped` | Upside down — USB-C port at the top |
+| `landscapeflipped` | Portrait rotated 90° clockwise — USB-C port on the left |
+
+## Aspect ratio
+
+The tablet surface is 3:4 (157.5 × 210 mm). Mapping all of it onto a wider screen
+stretches every stroke — on a 1920×1080 display that is 1.33× horizontally in
+landscape and 2.37× in portrait, which turns drawn circles into ellipses. `--fit`
+controls what happens instead:
+
+| Value | Behavior |
+|-------|----------|
+| `crop` (default) | Use a centred strip of the tablet with the screen's aspect ratio. Whole screen reachable, nothing distorted, outer strip of the tablet unused. |
+| `letterbox` | Use the whole tablet surface, mapped onto a centred rectangle of the screen. Nothing on the tablet wasted, screen edges unreachable. |
+| `stretch` | Full tablet to full screen, distortion included. The pre-0.4 behavior. |
 
 ## Touch gestures
 
@@ -117,6 +135,37 @@ while the pen is in proximity (verified via `evtest`). This means
 *simultaneous draw + pinch is not possible at the hardware level* — the
 workflow is "lift pen → pinch / pan / rotate → resume drawing." This is a
 property of the device, not the tool.
+
+## Palm rejection
+
+Three layers, in the order they act:
+
+1. **Firmware.** The rM2 panel goes quiet while the pen is in proximity, so a hand
+   resting during a stroke usually never reaches the host at all. Verified, but it is
+   the device's behavior, not something this tool controls — and the Paper Pro's
+   equivalent is unverified.
+2. **Pen proximity gate** (`Core/Pipeline/PenProximityGate.cs`, always on). While the
+   pen is in range, touch is withheld and whatever the host was holding is released.
+   Contacts that were already down when the pen arrived stay suppressed until they are
+   lifted, so a palm cannot spring back to life on pen-up — including the case where
+   the firmware stops reporting a contact without ever releasing it. The gate stays
+   closed for 150 ms after the pen leaves, so a hand still settling doesn't land.
+3. **Stale-contact sweep** (`TouchOptions.StaleContactMs`, default 3 s). Backstop for a
+   contact abandoned with no release event: it is dropped and its slot returned to the
+   pool. Deliberately not shorter — a motionless contact on this panel can go over a
+   second without reporting (measured: 1085 ms in
+   `tools/EventDiagnostics/samples/touch-pen.log`), because the panel only reports on
+   change.
+
+A **contact-size filter** (`TouchOptions.MaxTouchMajor`) exists but is **off by
+default**. The rM2 cannot report `MT_TOOL_PALM` — its `ABS_MT_TOOL_TYPE` range is 0–1
+and the kernel's palm value is 2 — so size is the only available signal, and no
+calibrated threshold exists yet. To set one: capture a palm rest and a fingertip with
+`tools/EventDiagnostics` against `/dev/input/event2`, compare their
+`ABS_MT_TOUCH_MAJOR` values, and pick a threshold between them. Contact size is
+forwarded to hosts on Linux (`ABS_MT_TOUCH_MAJOR`/`MINOR`); on Windows it is not,
+because `rcContact` is a pixel rectangle and this panel's size units are unknown —
+see `MappedTouchContact` for the details.
 
 ## App compatibility
 
@@ -140,7 +189,22 @@ The virtual device appears as a standard pen tablet to any app that reads from t
 - **MyPaint** — works out of the box
 - **Blender** — works with tablet pressure in sculpt and paint modes
 
-The device uses `INPUT_PROP_DIRECT` so absolute coordinates map 1:1 to screen pixels. Pressure is reported on the 0–1024 scale.
+The device uses `INPUT_PROP_DIRECT` so absolute coordinates map 1:1 to screen pixels. Pressure is reported on the 0–1024 scale, and hover height on `ABS_DISTANCE` (0–255).
+
+Sanity check that the virtual device looks right to the input stack (libinput 1.31.3, 1920×1080 screen, default `--fit crop`):
+
+```
+$ sudo libinput list-devices          # while remtablet is running
+Device:       reMarkable 2 Pen
+Capabilities: tablet
+Size:         160x90mm
+```
+
+`Capabilities: tablet` is what makes Wayland compositors and Krita treat it as a pen tablet rather than
+a generic absolute pointer. The size comes from the declared axis resolution; it should be close to the
+mapped tablet area (157.5 × 88.6 mm here — the small overshoot is the kernel's integer units-per-mm).
+Something like `19x11mm` means the resolution is being derived from tablet ticks instead of screen
+pixels.
 
 ### Touch gesture compatibility (`--gestures touch`)
 
@@ -319,7 +383,11 @@ Auto-detection via `uname -m` routes the right profile automatically. You can al
 
 - Pen tilt and hover-distance axis ranges (placeholders match rM2 conventions).
 - Touchscreen axis ranges (placeholders match the 1620 × 2160 display).
-- Whether the pen suppresses touch in proximity (assumed true; rM2 behavior).
+- Surface size in millimetres, used for aspect-correct fitting (derived from the
+  marketed 11.8" display, not measured).
+- Whether the pen suppresses touch in proximity. No longer a correctness
+  dependency — the host-side pen gate runs on every device — but it decides
+  whether draw-plus-gesture is physically possible.
 - That `uname -m` returns `aarch64` on the production firmware build (community sources strongly imply yes).
 
 If you have a Paper Pro and want to help, run `tools/EventDiagnostics` against `/dev/input/event2` and `/dev/input/event3` and open an issue with the captured axis ranges. Until those replace the placeholders, treat Paper Pro support as *experimental*.
@@ -346,17 +414,35 @@ Capacitive multi-touch panel, driver `pt_mt`. Confirmed via `evtest` 2026-05-07.
 
 | Axis | Range | Notes |
 |------|-------|-------|
-| ABS_MT_POSITION_X | 0 – 1403 | Display-aligned, INPUT_PROP_DIRECT |
-| ABS_MT_POSITION_Y | 0 – 1871 | Display-aligned, INPUT_PROP_DIRECT |
+| ABS_MT_POSITION_X | 0 – 1403 | Short axis. Origin *assumed* display top-left — see the caveat below |
+| ABS_MT_POSITION_Y | 0 – 1871 | Long axis. Origin *assumed* display top-left — see the caveat below |
 | ABS_MT_PRESSURE | 0 – 255 | Per-contact pressure |
 | ABS_MT_SLOT | 0 – 31 | Hardware-reported; tool caps tracking at 5 |
 | ABS_MT_TRACKING_ID | 0 – 65535 | Monotonically incrementing per-contact ID |
 | Sample rate | ~85 Hz | Measured under continuous motion |
 
+> **⚠ Unverified premise — the one thing to check if the mapping feels wrong.**
+> Every orientation case for *both* pen and touch assumes the touch panel's (0,0)
+> is the display's **top-left**. `INPUT_PROP_DIRECT` does not establish that: it
+> only says the digitizer overlays a display, not which corner is the origin or
+> whether an axis is mirrored (the kernel has `touchscreen-inverted-x/-y` device-tree
+> properties precisely because panels ship mirrored). The pen convention was then
+> *derived from* the touch assumption, so if touch is mirrored, pen is wrong the
+> same way — the two still agree with each other and every unit test still passes.
+> This convention has already been flipped 180° once.
+>
+> To settle it: hold the device USB-C-port-down, run `tools/EventDiagnostics`
+> against `/dev/input/event2`, and touch the **top-left** corner. Raw values near
+> (0, 0) confirm the premise; near (1403, 1871) means everything is 180° out. Repeat
+> on `event1` with the pen at the same corner, and commit both captures to
+> `tools/EventDiagnostics/samples/` — the pen capture the axis table above cites is
+> not currently in the repo, so nobody can re-check it.
+
 > **Pen-priority hardware behavior:** the rM2 firmware suppresses the
-> touchscreen entirely while the pen is in proximity. This is verified — the
-> `PenToolGate` was originally planned as a host-side workaround but turned
-> out to be unnecessary. Workflow: lift the pen, gesture, then resume drawing.
+> touchscreen entirely while the pen is in proximity. Verified. It is no longer
+> load-bearing, though: the host-side pen gate runs regardless, so correctness does
+> not depend on firmware arbitration (see [Palm rejection](#palm-rejection)).
+> Workflow is unchanged: lift the pen, gesture, then resume drawing.
 
 > **Note on tilt:** tilt rotation matches the position transform that aligns
 > with the touchscreen. The Windows Ink sign convention (positive tilt-X =

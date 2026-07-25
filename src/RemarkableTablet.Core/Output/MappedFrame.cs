@@ -10,6 +10,7 @@ public readonly record struct MappedFrame(
     uint Pressure, // 0–1024  (Windows Ink scale)
     int TiltX, // −90 to +90 degrees
     int TiltY, // −90 to +90 degrees
+    int Distance, // hover height, raw device units (0 = on the surface)
     bool IsTouch,
     bool IsEraser,
     bool BarrelButton,

@@ -69,6 +69,12 @@ public partial class SettingsWindow : Window
             "LandscapeFlipped" => 3,
             _ => 0
         };
+        FitBox.SelectedIndex = s.Fit switch
+        {
+            "letterbox" => 1,
+            "stretch" => 2,
+            _ => 0
+        };
         InkRadio.IsChecked = s.OutputMode != OutputModes.Mouse;
         MouseRadio.IsChecked = s.OutputMode == OutputModes.Mouse;
         PressureBox.SelectedIndex = s.PressureCurve switch
@@ -101,6 +107,12 @@ public partial class SettingsWindow : Window
             2 => "PortraitFlipped",
             3 => "LandscapeFlipped",
             _ => "Portrait"
+        };
+        s.Fit = FitBox.SelectedIndex switch
+        {
+            1 => "letterbox",
+            2 => "stretch",
+            _ => "crop"
         };
         s.OutputMode = MouseRadio.IsChecked == true ? OutputModes.Mouse : OutputModes.Ink;
         s.PressureCurve = PressureBox.SelectedIndex switch
@@ -170,7 +182,13 @@ public partial class SettingsWindow : Window
             MonitorY = screen.Bounds.Top,
             MonitorW = screen.Bounds.Width,
             MonitorH = screen.Bounds.Height,
-            Orientation = orient
+            Orientation = orient,
+            Fit = FitBox.SelectedIndex switch
+            {
+                1 => FitMode.Letterbox,
+                2 => FitMode.Stretch,
+                _ => FitMode.Crop
+            }
         };
 
         SetStatus("Connecting…");

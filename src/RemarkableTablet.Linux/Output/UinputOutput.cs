@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using RemarkableTablet.Core.Devices;
+using RemarkableTablet.Core.Mapping;
 using RemarkableTablet.Core.Output;
 using RemarkableTablet.Linux.Interop;
 
@@ -18,17 +19,30 @@ namespace RemarkableTablet.Linux.Output;
 /// </summary>
 public sealed class UinputOutput : IOutputMode
 {
-    private readonly PenAxes _penAxes;
+    private readonly int _distanceMax;
     private readonly int _screenH;
     private readonly int _screenW;
+    private readonly int _xResolution;
+    private readonly int _yResolution;
     private int _fd = -1;
     private bool _wasInRange;
 
-    public UinputOutput(int screenW, int screenH, PenAxes penAxes)
+    /// <param name="screenW">Full screen width in pixels — the ABS_X range.</param>
+    /// <param name="screenH">Full screen height in pixels — the ABS_Y range.</param>
+    /// <param name="transform">
+    ///     Supplies the axis resolutions, in screen pixels per millimetre of
+    ///     tablet surface. They must be expressed in the same units as the axis
+    ///     ranges above (screen pixels), which is why they come from the mapping
+    ///     geometry rather than from the device profile's tablet-tick resolution.
+    /// </param>
+    /// <param name="penAxes">Pen axis ranges — used for the hover-distance range.</param>
+    public UinputOutput(int screenW, int screenH, ScreenTransform transform, PenAxes penAxes)
     {
         _screenW = screenW;
         _screenH = screenH;
-        _penAxes = penAxes;
+        _xResolution = transform.XResolution;
+        _yResolution = transform.YResolution;
+        _distanceMax = penAxes.DistanceMax;
     }
 
     public void Initialize()
@@ -56,18 +70,23 @@ public sealed class UinputOutput : IOutputMode
         Ioctl(UinputIoctl.UI_SET_ABSBIT);
         Ioctl(UinputIoctl.UI_SET_ABSBIT, AbsCode.ABS_Y);
         Ioctl(UinputIoctl.UI_SET_ABSBIT, AbsCode.ABS_PRESSURE);
+        Ioctl(UinputIoctl.UI_SET_ABSBIT, AbsCode.ABS_DISTANCE);
         Ioctl(UinputIoctl.UI_SET_ABSBIT, AbsCode.ABS_TILT_X);
         Ioctl(UinputIoctl.UI_SET_ABSBIT, AbsCode.ABS_TILT_Y);
 
         SetupDevice();
 
-        // Axis ranges match MappedFrame units so values inject directly without re-scaling.
-        // ABS_X/Y resolution from the device profile is what makes libinput
+        // Axis ranges match MappedFrame units so values inject directly without
+        // re-scaling. A non-zero ABS_X/Y resolution is what makes libinput
         // recognise this virtual device as a tablet on Wayland — see FreeCap23/
-        // reMarkable-tablet-driver for the original observation.
-        SetAxis(AbsCode.ABS_X, 0, _screenW - 1, 0, 0, _penAxes.XResolution);
-        SetAxis(AbsCode.ABS_Y, 0, _screenH - 1, 0, 0, _penAxes.YResolution);
+        // reMarkable-tablet-driver for the original observation. It must be in
+        // units-per-mm of the *declared axis* (screen pixels here), not the
+        // tablet's own ticks-per-mm: mixing those told libinput the tablet was
+        // ~19 mm wide.
+        SetAxis(AbsCode.ABS_X, 0, _screenW - 1, 0, 0, _xResolution);
+        SetAxis(AbsCode.ABS_Y, 0, _screenH - 1, 0, 0, _yResolution);
         SetAxis(AbsCode.ABS_PRESSURE, 0, InjectionScale.PressureMax, 4, 0);
+        SetAxis(AbsCode.ABS_DISTANCE, 0, _distanceMax, 0, 0);
         SetAxis(AbsCode.ABS_TILT_X, InjectionScale.TiltMin, InjectionScale.TiltMax, 0, 0);
         SetAxis(AbsCode.ABS_TILT_Y, InjectionScale.TiltMin, InjectionScale.TiltMax, 0, 0);
 
@@ -101,6 +120,7 @@ public sealed class UinputOutput : IOutputMode
         EmitEvent(EvType.EV_ABS, AbsCode.ABS_X, frame.ScreenX);
         EmitEvent(EvType.EV_ABS, AbsCode.ABS_Y, frame.ScreenY);
         EmitEvent(EvType.EV_ABS, AbsCode.ABS_PRESSURE, (int)frame.Pressure);
+        EmitEvent(EvType.EV_ABS, AbsCode.ABS_DISTANCE, Math.Clamp(frame.Distance, 0, _distanceMax));
         EmitEvent(EvType.EV_ABS, AbsCode.ABS_TILT_X, frame.TiltX);
         EmitEvent(EvType.EV_ABS, AbsCode.ABS_TILT_Y, frame.TiltY);
 

@@ -127,7 +127,8 @@ public partial class App : Application
             ITouchOutput? touchOutput = null;
             if (gestures)
             {
-                touchMapper = new TouchCoordinateMapper(mappingOpts, profile);
+                // Share the pen's fitted geometry so pen and touch agree on pixels.
+                touchMapper = new TouchCoordinateMapper(mappingOpts, profile, mapper.Transform);
                 touchOutput = new WindowsTouchInjectionOutput(profile.Touch.MaxTracked);
             }
 

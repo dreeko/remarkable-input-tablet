@@ -14,6 +14,9 @@ namespace RemarkableTablet.Linux.Output;
 /// </summary>
 public sealed class UinputTouchOutput : ITouchOutput
 {
+    /// <summary>Declared range for the contact-size axes — matches the rM2 panel's 0–255.</summary>
+    private const int TouchSizeMax = 255;
+
     // Slots active in the previous frame, keyed by slot index. Value is the
     // tracking ID (cached so we don't re-emit ABS_MT_TRACKING_ID every frame).
     private readonly Dictionary<int, int> _activeSlots = new();
@@ -55,6 +58,7 @@ public sealed class UinputTouchOutput : ITouchOutput
         Ioctl(UinputIoctl.UI_SET_ABSBIT, AbsCode.ABS_MT_TRACKING_ID);
         Ioctl(UinputIoctl.UI_SET_ABSBIT, AbsCode.ABS_MT_PRESSURE);
         Ioctl(UinputIoctl.UI_SET_ABSBIT, AbsCode.ABS_MT_TOUCH_MAJOR);
+        Ioctl(UinputIoctl.UI_SET_ABSBIT, AbsCode.ABS_MT_TOUCH_MINOR);
 
         SetupDevice();
 
@@ -63,7 +67,11 @@ public sealed class UinputTouchOutput : ITouchOutput
         SetAxis(AbsCode.ABS_MT_POSITION_Y, 0, _screenH - 1, 0, 0);
         SetAxis(AbsCode.ABS_MT_TRACKING_ID, 0, 65535, 0, 0);
         SetAxis(AbsCode.ABS_MT_PRESSURE, 0, InjectionScale.PressureMax, 0, 0);
-        SetAxis(AbsCode.ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0);
+
+        // Contact size passes through in the source panel's units (rM2: 0–255).
+        // Not converted — see MappedTouchContact for why the real unit is unknown.
+        SetAxis(AbsCode.ABS_MT_TOUCH_MAJOR, 0, TouchSizeMax, 0, 0);
+        SetAxis(AbsCode.ABS_MT_TOUCH_MINOR, 0, TouchSizeMax, 0, 0);
 
         Ioctl(UinputIoctl.UI_DEV_CREATE);
 
@@ -98,6 +106,8 @@ public sealed class UinputTouchOutput : ITouchOutput
             EmitEvent(EvType.EV_ABS, AbsCode.ABS_MT_POSITION_X, c.ScreenX);
             EmitEvent(EvType.EV_ABS, AbsCode.ABS_MT_POSITION_Y, c.ScreenY);
             EmitEvent(EvType.EV_ABS, AbsCode.ABS_MT_PRESSURE, (int)c.Pressure);
+            EmitEvent(EvType.EV_ABS, AbsCode.ABS_MT_TOUCH_MAJOR, Math.Clamp(c.TouchMajor, 0, TouchSizeMax));
+            EmitEvent(EvType.EV_ABS, AbsCode.ABS_MT_TOUCH_MINOR, Math.Clamp(c.TouchMinor, 0, TouchSizeMax));
             anyEmitted = true;
         }
 

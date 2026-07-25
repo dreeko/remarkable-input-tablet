@@ -6,9 +6,44 @@ namespace RemarkableTablet.Core.Tests;
 
 public class GestureEngineTests
 {
-    private static MappedTouchContact C(int trackingId, int x, int y, int slot = 0)
+    private static MappedTouchContact C(int trackingId, int x, int y, int slot = 0, int major = 0)
     {
-        return new MappedTouchContact(slot, trackingId, x, y, 0);
+        return new MappedTouchContact(slot, trackingId, x, y, 0, major);
+    }
+
+    [Fact]
+    public void AnchorsAreTheTwoSmallestContacts_NotTheFirstTwoSlots()
+    {
+        // A resting palm arrives in a low slot and would otherwise anchor the
+        // gesture, leaving the user's actual fingers as the ignored third contact.
+        var engine = new GestureEngine();
+        var palm = C(1, 0, 0, 0, 200);
+        var fingerA = C(2, 100, 100, 1, 12);
+        var fingerB = C(3, 300, 500, 2, 14);
+
+        var begin = Assert.IsType<GestureBegin>(
+            Assert.Single(engine.Process(Frame(palm, fingerA, fingerB))));
+
+        // Centroid of the two fingers, with the palm ignored.
+        Assert.Equal(200, begin.CenterX);
+        Assert.Equal(300, begin.CenterY);
+
+        // And the gesture tracks those two: dropping the palm changes nothing.
+        var next = engine.Process(Frame(fingerA, fingerB));
+        Assert.DoesNotContain(next, e => e is GestureEnd);
+    }
+
+    [Fact]
+    public void WithoutSizeData_FallsBackToArrivalOrder()
+    {
+        // Devices that don't report contact size all tie at TouchMajor 0, which
+        // must degrade to the old behavior rather than picking arbitrarily.
+        var engine = new GestureEngine();
+        var begin = Assert.IsType<GestureBegin>(
+            Assert.Single(engine.Process(Frame(C(1, 100, 100), C(2, 300, 500, 1), C(3, 900, 900, 2)))));
+
+        Assert.Equal(200, begin.CenterX);
+        Assert.Equal(300, begin.CenterY);
     }
 
     private static MappedTouchFrame Frame(params MappedTouchContact[] contacts)

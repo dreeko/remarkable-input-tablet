@@ -21,13 +21,19 @@ public sealed record DeviceProfile
     public required TouchAxes Touch { get; init; }
 
     /// <summary>
-    ///     True if the firmware suppresses touch events while the pen is in
-    ///     proximity (rM2 hardware-level behavior, verified via evtest). When
-    ///     true, no host-side pen-tool gate is needed to keep gestures from
-    ///     firing during drawing.
+    ///     Physical size of the drawing surface in the device's portrait frame
+    ///     (short axis = width, long axis = height). Used to map the tablet onto
+    ///     the host screen without distorting the aspect ratio — see
+    ///     <see cref="Mapping.FitMode" />.
     /// </summary>
-    public bool PenSuppressesTouch { get; init; }
+    public required ActiveArea Surface { get; init; }
 }
+
+/// <summary>
+///     Drawing-surface dimensions in millimetres, measured in the device's
+///     portrait frame (USB-C port at the bottom).
+/// </summary>
+public sealed record ActiveArea(double WidthMm, double HeightMm);
 
 /// <summary>
 ///     Byte layout of <c>struct input_event</c>. 32-bit ARM userspace uses 16
