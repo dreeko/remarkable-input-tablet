@@ -95,11 +95,12 @@ public class CoordinateMapperTests
     // to the axis convention has to argue with the device rather than with a
     // formula. Device held portrait, USB-C edge at the bottom.
     [Theory]
-    // pen tip on the top-left corner, then the top-right corner
-    [InlineData(20258, 672, 0, 0)]
-    [InlineData(20584, 15258, 1919, 0)]
+    // pen tip on the top-left corner, then the top-right corner. Both are along the
+    // top edge, so only the expected X differs; Y is asserted near 0 either way.
+    [InlineData(20258, 672, 0)]
+    [InlineData(20584, 15258, 1919)]
     public void MeasuredPenCorners_LandOnTheCorrespondingScreenCorner(
-        int rawX, int rawY, int expectX, int expectY)
+        int rawX, int rawY, int expectX)
     {
         var mapped = MakeMapper(Orientation.Portrait).Map(MakeFrame(rawX, rawY));
 

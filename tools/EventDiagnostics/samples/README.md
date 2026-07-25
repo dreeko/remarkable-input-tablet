@@ -211,25 +211,43 @@ Both mappers were corrected against these numbers, and the values above are pinn
 `CoordinateMapperTests` / `TouchCoordinateMapperTests`, including a cross-device test asserting that
 pen and touch land within 40 px of each other on the same physical corner.
 
-### Pen-proximity suppression abandons live contacts
+### Pen arbitration: firmware blocks new contacts, not established ones
 
-Same session, second phase: a fingertip was rested mid-screen and held, then the pen was brought into
-proximity while the finger stayed down.
+Three sessions bear on this, and the middle one was misread at first.
 
-```
-touch contact id 84   down t=38.76   …   never released
-pen BTN_TOOL_PEN=1    at    t=44.56
-touch stream          silent from t=42.53 to the end of the capture
-```
+**Session 3 (2026-07-25, `hw3` captures — the decisive one).** A fingertip was rested mid-screen and
+kept *moving* in small circles for 27 s while the pen was brought into proximity three times, once
+reaching `ABS_DISTANCE 0`. The contact reported continuously throughout:
 
-The firmware does **not** emit `ABS_MT_TRACKING_ID = -1` for a contact that is live when the pen
-arrives — it simply stops reporting, leaving the contact live forever from the host's point of view.
-Every other contact across both sessions was released cleanly, so this is specific to pen suppression.
+| Pen in range | Duration | Position samples from the held contact | Max gap |
+|---|---|---|---|
+| 13.10 – 13.18 | 0.08 s | 12 | 12 ms |
+| 15.53 – 17.36 | 1.83 s | 269 | 24 ms |
+| 18.90 – 20.85 | 1.95 s | 293 | 35 ms |
 
-This is why `TouchStateMachine`'s stale-contact sweep exists, and why `PenProximityGate` releases the
-sink and suppresses live tracking IDs the moment the pen comes into range rather than waiting for a
-touch frame that will never arrive.
+Uninterrupted ~85 Hz cadence, and the contact was released normally at the end. **An established
+contact is not suppressed.** (An accidental brush produced eight brief contacts at t = 11.49–12.77;
+they end before the first proximity window and do not affect the above.)
 
-> Caveat: silence from a suppressed panel and silence from a dead SSH stream look identical in a
-> capture. A follow-up run where the finger keeps moving after the pen withdraws would distinguish
-> them — if events resume, the stream was alive throughout.
+**Session 1 (2026-05-07, `touch-pen.log`).** A finger resting down *during* a pen stroke produced zero
+events, and the stream was demonstrably alive because unrelated touches resumed afterwards. So **new
+contacts are suppressed** while the pen is in proximity.
+
+**Session 2 (2026-07-25, `hw2` captures) — inconclusive, and an earlier reading of it was wrong.** A
+motionless fingertip's contact was never released and the touch stream fell silent at t = 42.53, which
+was first written up here as "the firmware abandons live contacts". Session 3 contradicts that. The
+silence is equally explained by the capture's SSH stream ending there, and a motionless contact
+generates no events anyway because the panel reports on change. Treat that session as evidence of
+nothing.
+
+### What this means for the host
+
+- **Host-side palm rejection is load-bearing**, for the most common case rather than an exotic one: a
+  hand already resting on the panel when a stroke begins keeps injecting touch for the entire stroke,
+  because firmware only blocks contacts that *start* during proximity. `PenProximityGate` exists for
+  exactly this.
+- **The stale-contact sweep is precaution, not a fix for observed behavior.** No contact was ever
+  abandoned across four sessions. It stays because it costs one timer and the failure it prevents — a
+  permanently stuck touch-down holding an output slot — is severe and silent.
+- "Simultaneous draw + pinch is impossible" is still true for *starting* a gesture mid-stroke, but not
+  because touch stops entirely: an already-down finger keeps being tracked.

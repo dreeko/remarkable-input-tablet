@@ -6,23 +6,26 @@ namespace RemarkableTablet.Core.Pipeline;
 ///     Host-side palm rejection: while the pen is near the surface, touch is not
 ///     forwarded to the host.
 ///     <para>
-///         The rM2 firmware already suppresses its touch panel while the pen is in
-///         proximity (verified — see <c>tools/EventDiagnostics/samples/README.md</c>),
-///         so on that device this gate mostly has nothing to suppress. What it does
-///         do, on every device, is handle the two cases firmware suppression cannot:
+///         The rM2's own arbitration is only half a solution, measured 2026-07-25
+///         (<c>tools/EventDiagnostics/samples/README.md</c>): the firmware blocks
+///         <i>new</i> contacts while the pen is in proximity, but a contact that was
+///         already established keeps streaming straight through — a fingertip held
+///         down for 27 s reported without interruption (max gap 35 ms) across three
+///         proximity windows, one of them at <c>ABS_DISTANCE 0</c>.
 ///     </para>
+///     <para>So this gate carries the cases the firmware does not:</para>
 ///     <list type="number">
 ///         <item>
-///             A contact that is already down when the pen arrives. If the panel
-///             simply goes quiet without releasing it, the host would hold that
-///             contact for the whole stroke. The gate releases everything on entry
-///             and then ignores those tracking IDs until they are lifted, so a palm
-///             resting through a stroke cannot reappear as a live contact.
+///             The common one: a hand already resting on the panel when a stroke
+///             begins. Firmware will happily report it for the entire stroke. The
+///             gate releases what the sink holds and then ignores those tracking IDs
+///             until they are lifted, so the resting hand can neither drag during the
+///             stroke nor spring back to life on pen-up.
 ///         </item>
 ///         <item>
-///             A device that does not arbitrate in firmware at all. The Paper Pro's
-///             behavior here is unverified, and any future device is unknown; the
-///             gate means correctness no longer depends on that answer.
+///             A device that does not arbitrate at all. The Paper Pro's behavior is
+///             unverified, and any future device is unknown; the gate means
+///             correctness no longer depends on that answer.
 ///         </item>
 ///     </list>
 ///     <para>

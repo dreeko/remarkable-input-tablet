@@ -17,10 +17,17 @@ public sealed record TouchOptions
     public int MaxTracked { get; init; } = 5;
 
     /// <summary>
-    ///     Release a contact that has not been updated for this long. Safety net
-    ///     for a contact the firmware abandons without an <c>ABS_MT_TRACKING_ID
-    ///     = -1</c> — which is exactly what may happen when the pen enters
-    ///     proximity mid-contact and the panel goes silent.
+    ///     Release a contact that has not been updated for this long. Safety net for
+    ///     a contact abandoned without an <c>ABS_MT_TRACKING_ID = -1</c>, which would
+    ///     otherwise be held by the host forever.
+    ///     <para>
+    ///         No such abandonment has been observed on the rM2 — every contact across
+    ///         four capture sessions was released cleanly, including through pen
+    ///         proximity — so this is precaution, not a fix for a known behavior. It
+    ///         stays because the cost is one timer and the failure it prevents (a
+    ///         permanently stuck touch-down, plus an output slot never returned to the
+    ///         pool) is severe and silent.
+    ///     </para>
     ///     <para>
     ///         Do not shorten this without evidence: in
     ///         <c>tools/EventDiagnostics/samples/touch-pen.log</c> a genuinely

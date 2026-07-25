@@ -140,20 +140,25 @@ property of the device, not the tool.
 
 Three layers, in the order they act:
 
-1. **Firmware.** The rM2 panel goes quiet while the pen is in proximity, so a hand
-   resting during a stroke usually never reaches the host at all. Verified, but it is
-   the device's behavior, not something this tool controls — and the Paper Pro's
-   equivalent is unverified.
+1. **Firmware — half a solution.** The rM2 blocks *new* contacts while the pen is in
+   proximity, so you can't start a gesture mid-stroke. But a contact that is already
+   established keeps streaming right through: measured 2026-07-25, a held fingertip
+   reported without interruption across three proximity windows, one at
+   `ABS_DISTANCE 0`. A hand already resting when you start drawing is therefore fully
+   visible to the host for the whole stroke, which is why layer 2 is not optional.
+   (The Paper Pro's behavior here is unverified.)
 2. **Pen proximity gate** (`Core/Pipeline/PenProximityGate.cs`, always on). While the
    pen is in range, touch is withheld and whatever the host was holding is released.
    Contacts that were already down when the pen arrived stay suppressed until they are
-   lifted, so a palm cannot spring back to life on pen-up — including the case where
-   the firmware stops reporting a contact without ever releasing it. The gate stays
-   closed for 150 ms after the pen leaves, so a hand still settling doesn't land.
+   lifted, so a resting hand can neither drag during the stroke nor spring back to
+   life on pen-up. Driven from the pen loop rather than the touch loop, so it fires
+   even if the panel says nothing. Stays closed for 150 ms after the pen leaves, so a
+   hand still settling doesn't land.
 3. **Stale-contact sweep** (`TouchOptions.StaleContactMs`, default 3 s). Backstop for a
    contact abandoned with no release event: it is dropped and its slot returned to the
-   pool. Deliberately not shorter — a motionless contact on this panel can go over a
-   second without reporting (measured: 1085 ms in
+   pool. **Precaution, not a fix for observed behavior** — no contact was abandoned in
+   any of four capture sessions. Deliberately not shorter: a motionless contact on this
+   panel can go over a second without reporting (measured: 1085 ms in
    `tools/EventDiagnostics/samples/touch-pen.log`), because the panel only reports on
    change.
 
@@ -434,12 +439,13 @@ Capacitive multi-touch panel, driver `pt_mt`. Confirmed via `evtest` 2026-05-07.
 > rotation from a mirror. The measured values are pinned as test data, including a
 > cross-device test that pen and touch land within 40 px of each other.
 
-> **Pen-priority hardware behavior:** the rM2 firmware suppresses the
-> touchscreen entirely while the pen is in proximity — and it does so by simply
-> going silent: a contact that is live when the pen arrives is **never released**
-> (no `ABS_MT_TRACKING_ID = -1`), measured 2026-07-25. Left alone, the host would
-> hold that contact forever, which is what the pen gate and the stale-contact sweep
-> exist to prevent (see [Palm rejection](#palm-rejection)).
+> **Pen-priority hardware behavior — only half of it is real.** Measured
+> 2026-07-25: the firmware blocks *new* contacts while the pen is in proximity, but a
+> contact that was already established keeps streaming right through. A fingertip
+> held down for 27 s reported without interruption (max gap 35 ms) across three
+> proximity windows, one at `ABS_DISTANCE 0`. So a hand already resting when you
+> start a stroke goes on injecting touch for the whole stroke unless the host stops
+> it — which is what the pen gate is for (see [Palm rejection](#palm-rejection)).
 > Workflow is unchanged: lift the pen, gesture, then resume drawing.
 
 > **Note on tilt:** the tilt vector rotates with the corrected position transform —

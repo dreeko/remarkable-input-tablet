@@ -29,9 +29,16 @@ namespace RemarkableTablet.Core.Devices;
 ///         </item>
 ///     </list>
 ///     Touch is MT-B slot protocol. BTN_TOUCH is NOT reported by the touchscreen —
-///     contact lifecycle is driven by ABS_MT_TRACKING_ID transitions, and the
-///     firmware abandons in-flight contacts without a release when the pen enters
-///     proximity (see <see cref="Pipeline.PenProximityGate" />).
+///     contact lifecycle is driven by ABS_MT_TRACKING_ID transitions.
+///     <para>
+///         Pen arbitration, measured 2026-07-25: the firmware suppresses *new*
+///         contacts while the pen is in proximity, but an already-established
+///         contact keeps streaming right through it — a fingertip held down for 27 s
+///         reported continuously across three proximity windows, one of them at
+///         ABS_DISTANCE 0. So a hand already resting when a stroke begins goes on
+///         injecting touch for the whole stroke unless the host stops it: see
+///         <see cref="Pipeline.PenProximityGate" />.
+///     </para>
 /// </summary>
 public static class ReMarkable2Profile
 {
