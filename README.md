@@ -188,7 +188,9 @@ Use **Mouse** mode only as a fallback for applications that don't support Window
 
 The virtual device appears as a standard pen tablet to any app that reads from the Linux input subsystem:
 
-- **Krita** — works out of the box with pressure and tilt
+- **Krita** — works out of the box with pressure and tilt. On a Wayland session launch it as
+  `QT_QPA_PLATFORM=xcb krita`: Qt's native Wayland tablet path ignores the uinput device, while
+  XWayland's X11 path picks it up. Verified on sway 2026-07-25.
 - **GIMP** — enable extended input devices: Edit → Input Devices
 - **Inkscape** — Input Devices dialog, set the virtual tablet to "Screen" mode
 - **MyPaint** — works out of the box
@@ -228,7 +230,7 @@ been hands-on validated.
 | Microsoft Edge / Chrome      | untested   | untested  | n/a       | Browser pinch-zoom of pages. |
 | Windows Photos               | untested   | untested  | n/a       | Native Windows app — should work. |
 | **Linux**                    |            |           |           |       |
-| Krita                        | untested   | untested  | untested  | |
+| Krita                        | ✅         | ✅        | ✅        | Verified 2026-07-25 on sway/Wayland with `QT_QPA_PLATFORM=xcb`, rM2 over Wi-Fi, `--orientation landscape --gestures touch`. Pen pressure, pinch zoom, pan and twist all correct. Native Wayland Qt ignores the uinput tablet — use XWayland. |
 | GIMP                         | untested   | untested  | n/a       | |
 | Inkscape                     | untested   | untested  | n/a       | |
 | Blender                      | untested   | untested  | n/a       | |
