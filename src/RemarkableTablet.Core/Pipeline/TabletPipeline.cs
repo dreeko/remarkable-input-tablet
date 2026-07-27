@@ -41,6 +41,8 @@ public sealed class TabletPipeline : IAsyncDisposable
 
     // Counters from state machines of earlier connections, so the totals survive
     // a reconnect.
+    // Tracks the active-area boundary so leaving it emits exactly one pen-up.
+    private bool _penInArea = true;
     private TouchDiagnostics _retiredTouchStats = new(0, 0, 0);
     private TouchStateMachine? _touchStateMachine;
 
@@ -271,10 +273,28 @@ public sealed class TabletPipeline : IAsyncDisposable
                 // Palm rejection is driven from here, not from the touch loop:
                 // when the pen enters proximity the panel goes quiet, so the touch
                 // loop may not run again until long after the release is needed.
+                // Fed the frame even when the pen is outside the active area — the
+                // hand is still resting on the panel either way.
                 _gate.OnPenFrame(mapped);
                 if (_touchOutput is not null && _gate.TakePendingRelease())
                     ReleaseTouchContacts();
 
+                if (!mapped.InArea)
+                {
+                    // Outside the active area under EdgePolicy.Drop. Send one
+                    // out-of-range frame so the application ends the stroke rather
+                    // than leaving it hanging, then stay quiet until the pen
+                    // returns.
+                    if (_penInArea)
+                    {
+                        _penInArea = false;
+                        _output.Send(mapped with { InRange = false, IsTouch = false, Pressure = 0 });
+                    }
+
+                    continue;
+                }
+
+                _penInArea = true;
                 _output.Send(mapped);
             }
         }

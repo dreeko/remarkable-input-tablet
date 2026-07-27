@@ -58,6 +58,8 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <Label Grid.Row="0" Grid.Column="0" Content="Orientation:" VerticalAlignment="Center" />
                 <ComboBox Grid.Row="0" Grid.Column="1" x:Name="OrientationBox" Margin="0,2"
@@ -76,6 +78,14 @@
                 </ComboBox>
                 <Label Grid.Row="2" Grid.Column="0" Content="Monitor:" VerticalAlignment="Center" />
                 <ComboBox Grid.Row="2" Grid.Column="1" x:Name="MonitorBox" Margin="0,2" />
+                <Label Grid.Row="3" Grid.Column="0" Content="Active area:" VerticalAlignment="Center" />
+                <TextBox Grid.Row="3" Grid.Column="1" x:Name="AreaBox" Margin="0,2"
+                         ToolTip="Part of the tablet surface to use, as x,y,w,h — fractions (0.25,0,0.5,1) or millimetres (20mm,0mm,100mm,210mm). Blank uses the whole surface." />
+                <Label Grid.Row="4" Grid.Column="0" Content="Outside area:" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="4" Grid.Column="1" x:Name="EdgeBox" Margin="0,2" SelectedIndex="0">
+                    <ComboBoxItem>Clamp to the edge (default)</ComboBoxItem>
+                    <ComboBoxItem>Ignore — lift the pen instead</ComboBoxItem>
+                </ComboBox>
             </Grid>
         </GroupBox>
 

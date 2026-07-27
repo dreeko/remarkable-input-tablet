@@ -19,9 +19,12 @@ public sealed class ScreenTransform
     // Effective active area (after fit), as a fraction of the full surface.
     private readonly double _areaX;
     private readonly double _areaY;
+    private readonly EdgePolicy _edge;
 
     public ScreenTransform(MappingOptions opts, DeviceProfile profile)
     {
+        _edge = opts.Edge;
+
         _areaX = opts.TabletAreaX;
         _areaY = opts.TabletAreaY;
         _areaW = opts.TabletAreaW > 0 ? opts.TabletAreaW : 1.0;
@@ -104,17 +107,43 @@ public sealed class ScreenTransform
 
     /// <summary>
     ///     Normalised tablet point (0,0 = top-left of the surface in the rotated
-    ///     frame) to absolute screen pixels. Points outside the active area clamp
-    ///     to its edge, which is what a tablet does at the edge of its surface.
+    ///     frame) to absolute screen pixels, clamped to the target rectangle.
     /// </summary>
     public (int X, int Y) ToScreen(double rx, double ry)
     {
-        var u = Math.Clamp((rx - _areaX) / _areaW, 0.0, 1.0);
-        var v = Math.Clamp((ry - _areaY) / _areaH, 0.0, 1.0);
+        TryToScreen(rx, ry, out var point);
+        return point;
+    }
 
-        return (
+    /// <summary>
+    ///     As <see cref="ToScreen" />, but reports whether the point was actually
+    ///     inside the active area. Returns false only under
+    ///     <see cref="EdgePolicy.Drop" />; the out parameter is still the clamped
+    ///     position, so a caller can use it for a final pen-up before discarding
+    ///     the rest.
+    /// </summary>
+    public bool TryToScreen(double rx, double ry, out (int X, int Y) point)
+    {
+        var rawU = (rx - _areaX) / _areaW;
+        var rawV = (ry - _areaY) / _areaH;
+
+        var u = Math.Clamp(rawU, 0.0, 1.0);
+        var v = Math.Clamp(rawV, 0.0, 1.0);
+
+        point = (
             MonitorX + (int)Math.Round(u * (MonitorW - 1)),
             MonitorY + (int)Math.Round(v * (MonitorH - 1)));
+
+        if (_edge == EdgePolicy.Clamp) return true;
+
+        // Tolerance in output pixels, not in surface fractions: if clamping moved
+        // the point by less than half a pixel it is indistinguishable from being
+        // inside, so call it inside. A fraction-based epsilon would have to know
+        // the device's quantisation — one raw unit is ~6e-5 of the surface, which
+        // lands just outside a boundary expressed as an exact fraction and makes
+        // the edge of the area flicker.
+        return Math.Abs(rawU - u) * (MonitorW - 1) <= 0.5 &&
+               Math.Abs(rawV - v) * (MonitorH - 1) <= 0.5;
     }
 
     /// <summary>Normalise a raw axis value against its declared range.</summary>

@@ -52,7 +52,8 @@ public sealed class CoordinateMapper
         };
 
         // Active-area crop, aspect fit and screen scaling — shared with touch.
-        var (sx, sy) = Transform.ToScreen(rx, ry);
+        var inArea = Transform.TryToScreen(rx, ry, out var point);
+        var (sx, sy) = point;
 
         // Pressure: tablet raw → normalised → curve → Windows 0–1024
         var normPressure = ScreenTransform.Normalize(
@@ -74,7 +75,8 @@ public sealed class CoordinateMapper
             frame.IsTouch,
             frame.IsEraser,
             frame.BarrelButton1,
-            frame.InRange
+            frame.InRange,
+            inArea
         );
     }
 

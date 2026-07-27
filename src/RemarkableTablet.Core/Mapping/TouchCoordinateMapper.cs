@@ -37,13 +37,18 @@ public sealed class TouchCoordinateMapper
     {
         if (frame.Contacts.Count == 0) return MappedTouchFrame.Empty;
 
-        var mapped = new MappedTouchContact[frame.Contacts.Count];
-        for (var i = 0; i < frame.Contacts.Count; i++)
-            mapped[i] = MapContact(frame.Contacts[i]);
-        return new MappedTouchFrame(mapped);
+        // Under EdgePolicy.Drop a contact outside the active area is omitted
+        // rather than pinned to the border, so the sink releases it — the touch
+        // equivalent of the pen lifting.
+        var mapped = new List<MappedTouchContact>(frame.Contacts.Count);
+        foreach (var c in frame.Contacts)
+            if (MapContact(c) is { } m)
+                mapped.Add(m);
+
+        return mapped.Count == 0 ? MappedTouchFrame.Empty : new MappedTouchFrame(mapped);
     }
 
-    private MappedTouchContact MapContact(TouchContact c)
+    private MappedTouchContact? MapContact(TouchContact c)
     {
         // Normalise raw touch coords to [0,1] in the panel's own frame.
         var nx = ScreenTransform.Normalize(c.X, _profile.Touch.XMin, _profile.Touch.XMax);
@@ -64,7 +69,8 @@ public sealed class TouchCoordinateMapper
             _ => (nx, 1.0 - ny)
         };
 
-        var (sx, sy) = _transform.ToScreen(rx, ry);
+        if (!_transform.TryToScreen(rx, ry, out var point)) return null;
+        var (sx, sy) = point;
 
         // Pressure: device raw → 0..1024 (Windows Ink scale).
         var pressureNorm = ScreenTransform.Normalize(

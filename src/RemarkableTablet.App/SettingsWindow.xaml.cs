@@ -69,6 +69,8 @@ public partial class SettingsWindow : Window
             "LandscapeFlipped" => 3,
             _ => 0
         };
+        AreaBox.Text = s.Area;
+        EdgeBox.SelectedIndex = s.Edge == "drop" ? 1 : 0;
         FitBox.SelectedIndex = s.Fit switch
         {
             "letterbox" => 1,
@@ -108,6 +110,8 @@ public partial class SettingsWindow : Window
             3 => "LandscapeFlipped",
             _ => "Portrait"
         };
+        s.Area = AreaBox.Text.Trim();
+        s.Edge = EdgeBox.SelectedIndex == 1 ? "drop" : "clamp";
         s.Fit = FitBox.SelectedIndex switch
         {
             1 => "letterbox",
@@ -175,6 +179,14 @@ public partial class SettingsWindow : Window
             _ => "auto"
         };
 
+        // Shape check only; the full check needs the device profile, which the
+        // pipeline resolves after connecting.
+        if (TabletArea.ValidateSyntax(AreaBox.Text.Trim()) is { } areaError)
+        {
+            SetStatus($"Active area: {areaError}", true);
+            return;
+        }
+
         var connOpts = ConnectionOptions.WithPassword(password, address);
         var mappingOpts = new MappingOptions
         {
@@ -188,11 +200,13 @@ public partial class SettingsWindow : Window
                 1 => FitMode.Letterbox,
                 2 => FitMode.Stretch,
                 _ => FitMode.Crop
-            }
+            },
+            Edge = EdgeBox.SelectedIndex == 1 ? EdgePolicy.Drop : EdgePolicy.Clamp
         };
 
         SetStatus("Connecting…");
-        AppInstance.StartPipeline(connOpts, mappingOpts, outputMode, gestures, pressureCurve, device);
+        AppInstance.StartPipeline(
+            connOpts, mappingOpts, outputMode, gestures, pressureCurve, device, AreaBox.Text.Trim());
     }
 
     private void Disconnect_Click(object sender, RoutedEventArgs e)

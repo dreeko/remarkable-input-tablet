@@ -35,9 +35,29 @@ public enum FitMode
 }
 
 /// <summary>
+///     What happens to input outside the active tablet area.
+/// </summary>
+public enum EdgePolicy
+{
+    /// <summary>
+    ///     Pin it to the nearest edge of the target rectangle. What a tablet does
+    ///     at the physical edge of its surface, and the default.
+    /// </summary>
+    Clamp,
+
+    /// <summary>
+    ///     Ignore it entirely: the pen lifts rather than smearing along the border,
+    ///     and touch contacts outside the area are not forwarded. Usually preferred
+    ///     when the active area is a crop of the surface, since clamping there
+    ///     produces strokes along the boundary that the user never drew.
+    /// </summary>
+    Drop
+}
+
+/// <summary>
 ///     Defines how tablet coordinates map to the host screen.
 /// </summary>
-public sealed class MappingOptions
+public sealed record MappingOptions
 {
     // Target monitor bounds in screen pixels
     public int MonitorX { get; init; }
@@ -58,6 +78,9 @@ public sealed class MappingOptions
 
     /// <summary>Aspect-ratio handling. See <see cref="FitMode" />.</summary>
     public FitMode Fit { get; init; } = FitMode.Crop;
+
+    /// <summary>Behaviour outside the active area. See <see cref="EdgePolicy" />.</summary>
+    public EdgePolicy Edge { get; init; } = EdgePolicy.Clamp;
 
     /// <summary>Map the full area of a screen with explicit dimensions.</summary>
     public static MappingOptions ForScreen(

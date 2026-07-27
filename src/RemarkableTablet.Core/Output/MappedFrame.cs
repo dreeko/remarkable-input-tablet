@@ -14,5 +14,12 @@ public readonly record struct MappedFrame(
     bool IsTouch,
     bool IsEraser,
     bool BarrelButton,
-    bool InRange
+    bool InRange,
+    /// <summary>
+    ///     False when the pen is outside the active tablet area and
+    ///     <see cref="Mapping.EdgePolicy.Drop" /> is in force. The frame is still
+    ///     mapped (and still tells the palm gate the pen is near the surface), but
+    ///     the output should not follow it.
+    /// </summary>
+    bool InArea = true
 );

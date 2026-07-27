@@ -80,17 +80,17 @@ public partial class App : Application
     }
 
     public void StartPipeline(ConnectionOptions connOpts, MappingOptions mappingOpts, string outputMode,
-        bool gestures = false, string? pressureCurve = null, string device = "auto")
+        bool gestures = false, string? pressureCurve = null, string device = "auto", string? areaSpec = null)
     {
         if (_pipeline is not null || _pipelineStarting) return;
         // Set this before the async method reaches its first await so repeated
         // Connect clicks during device probing cannot start parallel pipelines.
         _pipelineStarting = true;
-        _ = StartPipelineAsync(connOpts, mappingOpts, outputMode, gestures, pressureCurve, device);
+        _ = StartPipelineAsync(connOpts, mappingOpts, outputMode, gestures, pressureCurve, device, areaSpec);
     }
 
     private async Task StartPipelineAsync(ConnectionOptions connOpts, MappingOptions mappingOpts,
-        string outputMode, bool gestures, string? pressureCurve, string device)
+        string outputMode, bool gestures, string? pressureCurve, string device, string? areaSpec)
     {
         SshTransport? transport = null;
         var transferred = false;
@@ -117,6 +117,16 @@ public partial class App : Application
                 profile = await DeviceDetector.DetectAsync(transport, CancellationToken.None);
                 WriteLog($"Detected: {profile.Name}");
             }
+
+            // Millimetre areas can only be resolved once the profile is known,
+            // which is after the device has been probed.
+            if (TabletArea.TryParse(areaSpec, profile, mappingOpts.Orientation, out var area, out var areaError))
+                mappingOpts = mappingOpts with
+                {
+                    TabletAreaX = area.X, TabletAreaY = area.Y, TabletAreaW = area.W, TabletAreaH = area.H
+                };
+            else
+                WriteLog($"Ignoring active area '{areaSpec}': {areaError}");
 
             var mapper = new CoordinateMapper(mappingOpts, profile, PressureCurve.FromName(pressureCurve));
             var output = outputMode == OutputModes.Mouse

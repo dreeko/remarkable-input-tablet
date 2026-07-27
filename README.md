@@ -76,6 +76,8 @@ For unattended use, prefer `--key ~/.ssh/id_ed25519` over putting a password in 
 | `--address <host>` | `10.11.99.1` | Device IP address or hostname |
 | `--orientation <value>` | `portrait` | `portrait`, `landscape`, `portraitflipped`, `landscapeflipped` — named by where the USB-C port sits |
 | `--fit <value>` | `crop` | Aspect handling. `crop` (use a centred strip of the tablet matching the screen's shape — whole screen reachable, no distortion), `letterbox` (use the whole tablet, map to a centred part of the screen), or `stretch` (full tablet to full screen, distorts strokes) |
+| `--area <x,y,w,h>` | whole surface | Use only part of the tablet. Fractions (`0.25,0,0.5,1`) or millimetres (`20mm,0mm,100mm,210mm`), measured from the top-left *in the chosen orientation*. Composes with `--fit`. |
+| `--edge <value>` | `clamp` | Outside the active area: `clamp` (pin to the border) or `drop` (ignore — the pen lifts and stray contacts are not forwarded). `drop` is usually better with `--area`, since clamping draws along the boundary. |
 | `--output <value>` | `ink` | `ink` (full pressure+tilt) or `mouse` (cursor only, Windows only) |
 | `--width <px>` | auto | Positive screen width in pixels; must be used with `--height` |
 | `--height <px>` | auto | Positive screen height in pixels; must be used with `--width` |
@@ -117,6 +119,23 @@ controls what happens instead:
 | `crop` (default) | Use a centred strip of the tablet with the screen's aspect ratio. Whole screen reachable, nothing distorted, outer strip of the tablet unused. |
 | `letterbox` | Use the whole tablet surface, mapped onto a centred rectangle of the screen. Nothing on the tablet wasted, screen edges unreachable. |
 | `stretch` | Full tablet to full screen, distortion included. The pre-0.4 behavior. |
+
+### Using part of the tablet
+
+`--area x,y,w,h` restricts input to a sub-rectangle of the surface, which then spans
+the whole target. Values are fractions or millimetres, measured from the top-left in
+whatever orientation you've chosen:
+
+```bash
+remtablet --area 0,0,1,0.5              # top half of the tablet
+remtablet --area 20mm,20mm,120mm,90mm   # a 120 × 90 mm patch, 20 mm in from the corner
+```
+
+Aspect fitting still applies on top, so `--area` with the default `--fit crop` stays
+undistorted. Pair it with `--edge drop`: at the edge of a *crop* the default clamping
+pins the cursor to the screen border and draws a line the user never made, whereas
+dropping lifts the pen instead. Clamping remains the default because at the physical
+edge of the full surface there is nowhere further to go.
 
 ## Touch gestures
 

@@ -33,6 +33,12 @@ public sealed class AppSettings
     /// <summary>"off" or "touch". Defaults to off so existing users see no behavior change on upgrade.</summary>
     public string Gestures { get; set; } = "off";
 
+    /// <summary>Active tablet area as "x,y,w,h" — fractions or mm. Empty uses the whole surface.</summary>
+    public string Area { get; set; } = "";
+
+    /// <summary>"clamp" (default) or "drop" — what happens outside the active area.</summary>
+    public string Edge { get; set; } = "clamp";
+
     /// <summary>"linear" (default), "soft" (boost light strokes), or "hard" (suppress light strokes).</summary>
     public string PressureCurve { get; set; } = "linear";
 

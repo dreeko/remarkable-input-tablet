@@ -43,6 +43,8 @@ var pressure = GetArg(args, "--pressure", "linear")!;
 var fitArg = GetArg(args, "--fit", "crop")!;
 var arbitrationArg = GetArg(args, "--arbitration", "full")!;
 var handArg = GetArg(args, "--hand", "auto")!;
+var areaArg = GetArg(args, "--area", null);
+var edgeArg = GetArg(args, "--edge", "clamp")!;
 var deviceArg = GetArg(args, "--device", "auto")!;
 var debug = args.Contains("--debug");
 
@@ -138,7 +140,20 @@ var fit = fitArg.ToLowerInvariant() switch
     _ => FitMode.Crop
 };
 
-var mappingOpts = MappingOptions.ForScreen(screenW, screenH, orient, fit);
+if (!TabletArea.TryParse(areaArg, profile, orient, out var area, out var areaProblem))
+{
+    Console.Error.WriteLine($"Error: invalid --area: {areaProblem}");
+    return 2;
+}
+
+var mappingOpts = new MappingOptions
+{
+    MonitorX = 0, MonitorY = 0, MonitorW = screenW, MonitorH = screenH,
+    Orientation = orient,
+    Fit = fit,
+    Edge = edgeArg.Equals("drop", StringComparison.OrdinalIgnoreCase) ? EdgePolicy.Drop : EdgePolicy.Clamp,
+    TabletAreaX = area.X, TabletAreaY = area.Y, TabletAreaW = area.W, TabletAreaH = area.H
+};
 var curve = PressureCurve.FromName(pressure);
 var mapper = new CoordinateMapper(mappingOpts, profile, curve);
 
@@ -265,7 +280,7 @@ static string? ValidateArgs(string[] values)
     {
         "--address", "--password", "--key", "--orientation", "--output",
         "--gestures", "--pressure", "--device", "--width", "--height", "--fit",
-        "--arbitration", "--hand"
+        "--arbitration", "--hand", "--area", "--edge"
     };
     var switchFlags = new HashSet<string>(StringComparer.Ordinal) { "--debug" };
     var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -307,6 +322,34 @@ static string? ValidateArgs(string[] values)
     var handValue = GetArg(values, "--hand", "auto")!;
     if (!OneOf(handValue, "auto", "left", "right"))
         return $"invalid --hand '{handValue}'; expected auto, left, or right.";
+
+    var edgeValue = GetArg(values, "--edge", "clamp")!;
+    if (!OneOf(edgeValue, "clamp", "drop"))
+        return $"invalid --edge '{edgeValue}'; expected clamp or drop.";
+
+    if (GetArg(values, "--area", null) is { } areaSpec)
+    {
+        if (TabletArea.ValidateSyntax(areaSpec) is { } syntaxError)
+            return $"invalid --area: {syntaxError}";
+
+        // Bounds depend on which tablet is attached, which isn't known until the
+        // device is probed. Check against the named profile if there is one, else
+        // against the largest surface we know of, so a plainly oversized area
+        // fails now rather than after a connection attempt. The exact check runs
+        // once the profile is resolved.
+        var sizingProfile = DeviceDetector.ByName(GetArg(values, "--device", "auto"))
+                            ?? ReMarkablePaperProProfile.Instance;
+        var sizingOrientation = (GetArg(values, "--orientation", "portrait") ?? "").ToLowerInvariant() switch
+        {
+            "landscape" => Orientation.Landscape,
+            "landscapeflipped" => Orientation.LandscapeFlipped,
+            "portraitflipped" => Orientation.PortraitFlipped,
+            _ => Orientation.Portrait
+        };
+
+        if (!TabletArea.TryParse(areaSpec, sizingProfile, sizingOrientation, out _, out var areaError))
+            return $"invalid --area: {areaError}";
+    }
 
     var pressureValue = GetArg(values, "--pressure", "linear")!;
     if (!OneOf(pressureValue, "linear", "soft", "hard"))
@@ -366,6 +409,10 @@ static void PrintUsage(TextWriter writer)
     writer.WriteLine("Mapping:");
     writer.WriteLine("  --orientation <value>  portrait, landscape, portraitflipped, or landscapeflipped");
     writer.WriteLine("  --fit <value>          crop (default, aspect-correct), letterbox, or stretch");
+    writer.WriteLine("  --area <x,y,w,h>       Use only part of the tablet surface. Fractions of the");
+    writer.WriteLine("                         surface (0.25,0,0.5,1) or millimetres (20mm,0mm,100mm,210mm),");
+    writer.WriteLine("                         measured in the chosen orientation from its top-left");
+    writer.WriteLine("  --edge <value>         Outside the active area: clamp (default) or drop");
     writer.WriteLine("  --pressure <value>     linear, soft, or hard (default: linear)");
     writer.WriteLine("  --gestures <value>     off or touch (default: off)");
     writer.WriteLine("  --arbitration <value>  Palm rejection while the pen is near:");
