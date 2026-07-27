@@ -118,6 +118,66 @@ public class TouchPolicyTests
     }
 
     [Fact]
+    public void SizeFilter_ClassificationIsSticky()
+    {
+        // libinput's rule: once a touch is a palm it stays one. Contact size
+        // fluctuates frame to frame (measured palms 17–79 vs fingertips 8–17), so
+        // re-testing downward would let a palm flicker back into a live contact
+        // in the middle of a rest.
+        var (sm, w, ch) = Setup(new TouchOptions { MaxTracked = 5, MaxTouchMajor = 40 });
+
+        Contact(sm, w, 0, 1, 200); // lands as a palm
+        sm.Process(Syn(), w);
+        Assert.Empty(Last(ch).Contacts);
+
+        // Same contact now reports a fingertip-sized major — must stay rejected.
+        sm.Process(Abs(EvdevCodes.ABS_MT_SLOT, 0), w);
+        sm.Process(Abs(EvdevCodes.ABS_MT_TOUCH_MAJOR, 10), w);
+        sm.Process(Syn(), w);
+
+        Assert.Empty(Last(ch).Contacts);
+        Assert.Equal(1, sm.DroppedContacts);
+    }
+
+    [Fact]
+    public void SizeFilter_StillPromotesAContactThatGrowsIntoAPalm()
+    {
+        // The other direction must keep working: a palm that lands lightly and
+        // spreads should be dropped once it crosses the threshold.
+        var (sm, w, ch) = Setup(new TouchOptions { MaxTracked = 5, MaxTouchMajor = 40 });
+
+        Contact(sm, w, 0, 1, 12);
+        sm.Process(Syn(), w);
+        Assert.Single(Last(ch).Contacts);
+
+        sm.Process(Abs(EvdevCodes.ABS_MT_SLOT, 0), w);
+        sm.Process(Abs(EvdevCodes.ABS_MT_TOUCH_MAJOR, 90), w);
+        sm.Process(Syn(), w);
+
+        Assert.Empty(Last(ch).Contacts);
+    }
+
+    [Fact]
+    public void SizeFilter_AFreshContactAfterAPalmIsNotTainted()
+    {
+        // Stickiness is per contact, not per slot: the next finger in that slot
+        // starts with a clean slate.
+        var (sm, w, ch) = Setup(new TouchOptions { MaxTracked = 5, MaxTouchMajor = 40 });
+
+        Contact(sm, w, 0, 1, 200);
+        sm.Process(Syn(), w);
+        sm.Process(Abs(EvdevCodes.ABS_MT_SLOT, 0), w);
+        sm.Process(Abs(EvdevCodes.ABS_MT_TRACKING_ID, -1), w);
+
+        Contact(sm, w, 0, 2, 12);
+        sm.Process(Syn(), w);
+
+        var frame = Last(ch);
+        Assert.Single(frame.Contacts);
+        Assert.Equal(2, frame.Contacts[0].TrackingId);
+    }
+
+    [Fact]
     public void SizeFilter_IsOffByDefault()
     {
         // The rM2 can't report MT_TOOL_PALM and no palm capture exists yet, so a

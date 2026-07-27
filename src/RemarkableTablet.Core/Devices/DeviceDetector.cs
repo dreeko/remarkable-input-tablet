@@ -16,6 +16,29 @@ public static class DeviceDetector
     }
 
     /// <summary>
+    ///     Reads <c>/proc/bus/input/devices</c> and locates this profile's pen and
+    ///     touch nodes by driver name, falling back to the profile's hard-coded
+    ///     paths. Never throws: a failed probe simply yields the fallbacks, since
+    ///     a stale path is no worse than not having looked.
+    /// </summary>
+    public static async Task<ResolvedInputDevices> ResolveDevicesAsync(
+        SshTransport transport, DeviceProfile profile, CancellationToken ct)
+    {
+        try
+        {
+            var table = await transport.RunCommandAsync("cat /proc/bus/input/devices", ct);
+            return InputDeviceMap.Parse(table).Resolve(profile);
+        }
+        catch (Exception ex)
+        {
+            return new ResolvedInputDevices(
+                profile.PenDevicePath,
+                profile.TouchDevicePath,
+                [$"could not read /proc/bus/input/devices ({ex.Message}); using default node paths"]);
+        }
+    }
+
+    /// <summary>
     ///     Maps a string from <c>uname -m</c> to the matching profile. Exposed
     ///     for unit tests; production code should call <see cref="DetectAsync" />.
     /// </summary>

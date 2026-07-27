@@ -111,6 +111,14 @@ public sealed class TabletPipeline : IAsyncDisposable
     /// </summary>
     public event Action<Exception>? Error;
 
+    /// <summary>
+    ///     Non-fatal observations made while opening the device: an input node
+    ///     that moved, or a touch driver this profile doesn't recognise (which
+    ///     means the measured axis conventions may not apply). Worth surfacing —
+    ///     both otherwise present as "the mapping is wrong" with no explanation.
+    /// </summary>
+    public event Action<string>? DeviceNoticed;
+
     public async Task RunAsync()
     {
         var ct = _cts.Token;
@@ -166,7 +174,13 @@ public sealed class TabletPipeline : IAsyncDisposable
     {
         await _transport.ConnectAsync(ct);
 
-        var penStream = _transport.OpenStream(_profile.PenDevicePath, ct);
+        // Locate the input nodes by driver name rather than trusting the profile's
+        // hard-coded paths, which shift between models and firmware revisions.
+        // Anything surprising is reported rather than silently worked around.
+        var devices = await DeviceDetector.ResolveDevicesAsync(_transport, _profile, ct);
+        foreach (var note in devices.Notes) DeviceNoticed?.Invoke(note);
+
+        var penStream = _transport.OpenStream(devices.PenPath, ct);
 
         // Pen channels — evdev events at ~100 Hz; unbounded is cheap and
         // avoids mid-frame loss that would corrupt the next emitted PenFrame.
@@ -192,7 +206,7 @@ public sealed class TabletPipeline : IAsyncDisposable
 
         if (_touchMapper is not null && _touchOutput is not null)
         {
-            var touchStream = _transport.OpenStream(_profile.TouchDevicePath, ct);
+            var touchStream = _transport.OpenStream(devices.TouchPath, ct);
 
             var touchEvdevChannel = Channel.CreateUnbounded<EvdevEvent>(new UnboundedChannelOptions
             {

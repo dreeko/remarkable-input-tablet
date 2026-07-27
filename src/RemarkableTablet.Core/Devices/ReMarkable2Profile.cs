@@ -48,6 +48,10 @@ public static class ReMarkable2Profile
         EventLayout = EvdevLayout.Bits32,
         PenDevicePath = "/dev/input/event1",
         TouchDevicePath = "/dev/input/event2",
+
+        // Names as reported by /proc/bus/input/devices on stock firmware 1231.
+        PenDeviceName = "Wacom I2C Digitizer",
+        TouchDeviceName = "pt_mt",
         Pen = new PenAxes(
             // Resolution = 100 ticks/mm follows FreeCap23/reMarkable-tablet-driver;
             // libinput uses this to recognise the virtual uinput device as a

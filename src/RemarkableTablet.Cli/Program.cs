@@ -181,6 +181,12 @@ transport.StateChanged += state =>
 };
 
 await using var pipeline = new TabletPipeline(transport, profile, mapper, output, touchMapper, touchOutput);
+pipeline.DeviceNoticed += note =>
+{
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.Error.WriteLine($"Note:  {note}");
+    Console.ResetColor();
+};
 pipeline.Error += ex =>
 {
     Console.ForegroundColor = ConsoleColor.Red;

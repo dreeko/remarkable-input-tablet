@@ -14,8 +14,27 @@ public sealed record DeviceProfile
     /// <summary>Byte layout of <c>struct input_event</c> on this device's userspace ABI.</summary>
     public required EvdevLayout EventLayout { get; init; }
 
+    /// <summary>
+    ///     Fallback node paths, used when the device can't be resolved by name.
+    ///     They move between models and firmware revisions (rM1 pen is event0,
+    ///     rM2 event1, rMPP event2), which is why <see cref="PenDeviceName" /> is
+    ///     preferred — see <see cref="InputDeviceMap" />.
+    /// </summary>
     public required string PenDevicePath { get; init; }
+
     public required string TouchDevicePath { get; init; }
+
+    /// <summary>
+    ///     Kernel device name as reported in <c>/proc/bus/input/devices</c>, used
+    ///     to locate the node at runtime instead of trusting the path above. Also
+    ///     the signal that a device is running a driver we have not characterised:
+    ///     stock rM2 firmware exposes the Parade <c>pt_mt</c> touch driver, while
+    ///     mainline kernels bind <c>cyttsp5</c>, whose coordinate behavior differed
+    ///     enough to break KOReader (koreader/koreader#10012).
+    /// </summary>
+    public string? PenDeviceName { get; init; }
+
+    public string? TouchDeviceName { get; init; }
 
     public required PenAxes Pen { get; init; }
     public required TouchAxes Touch { get; init; }

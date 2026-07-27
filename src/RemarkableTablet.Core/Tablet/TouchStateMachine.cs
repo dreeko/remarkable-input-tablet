@@ -249,7 +249,17 @@ public sealed class TouchStateMachine
         // sample captures), and a palm can also grow past the threshold after
         // landing. An oversize contact gives its slot back so it can't hog the
         // pool.
+        //
+        // The classification is one-way, following libinput's rule that a touch
+        // labelled a palm "will remain so even if the pressure drops below the
+        // threshold again". Contact size fluctuates frame to frame — measured
+        // palm blobs spanned 17–79 against fingertips at 8–17 — so re-testing
+        // both directions would let a palm flicker back into a live contact
+        // mid-rest, which is worse than never having filtered it.
         if (_opts.MaxTouchMajor > 0 && contact.TouchMajor > _opts.MaxTouchMajor)
+            contact.IsPalm = true;
+
+        if (contact.IsPalm)
         {
             if (contact.OutputSlot >= 0)
             {
@@ -313,6 +323,10 @@ public sealed class TouchStateMachine
     private sealed class MutableContact
     {
         public bool DropCounted;
+
+        /// <summary>Latched once the size filter rejects this contact; never cleared before release.</summary>
+        public bool IsPalm;
+
         public long LastUpdateMs;
         public int OutputSlot;
         public int TouchMajor, TouchMinor, Orientation, ToolType;

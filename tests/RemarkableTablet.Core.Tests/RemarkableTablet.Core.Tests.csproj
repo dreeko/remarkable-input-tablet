@@ -17,4 +17,12 @@
         <ProjectReference Include="..\..\src\RemarkableTablet.Core\RemarkableTablet.Core.csproj"/>
         <ProjectReference Include="..\..\src\RemarkableTablet.Linux\RemarkableTablet.Linux.csproj"/>
     </ItemGroup>
+    <ItemGroup>
+        <!-- Raw evdev captures from real hardware, replayed by ReplayTests so the
+             mapping is asserted against the device rather than against the
+             formulas that were derived from it. -->
+        <None Include="..\..\tools\EventDiagnostics\samples\*.bin"
+              Link="samples\%(Filename)%(Extension)"
+              CopyToOutputDirectory="PreserveNewest"/>
+    </ItemGroup>
 </Project>

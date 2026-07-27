@@ -134,6 +134,10 @@ public partial class App : Application
 
             var pipeline = new TabletPipeline(transport, profile, mapper, output, touchMapper, touchOutput);
             pipeline.ConnectionStateChanged += OnPipelineStateChanged;
+            // Node moved, or an unrecognised touch driver: goes to the log rather
+            // than a dialog, but it is the first thing to check when someone
+            // reports that the mapping is off.
+            pipeline.DeviceNoticed += note => WriteLog($"Device note: {note}");
             pipeline.Error += ex =>
             {
                 WriteLog($"Pipeline error: {ex}");
