@@ -4,7 +4,7 @@
              Keep in step with the release tag: the CLI's version flag reads it,
              and reported 1.0.0 for every release up to v0.5.0 because nothing
              set it. -->
-        <Version>0.6.0</Version>
+        <Version>0.7.0</Version>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(OS)' != 'Windows_NT'">
