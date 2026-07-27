@@ -80,7 +80,9 @@ For unattended use, prefer `--key ~/.ssh/id_ed25519` over putting a password in 
 | `--width <px>` | auto | Positive screen width in pixels; must be used with `--height` |
 | `--height <px>` | auto | Positive screen height in pixels; must be used with `--width` |
 | `--debug` | off | Print pipeline stage info on startup, and touch counters on exit (contacts dropped, stale releases, pen-gate closures) |
-| `--gestures <value>` | `off` | `touch` (inject multi-touch contacts for pinch / pan / rotate) or `off`. The rM2 firmware suppresses touch while the pen is in proximity, so two-finger gestures only register when the pen is set aside. |
+| `--gestures <value>` | `off` | `touch` (inject multi-touch contacts for pinch / pan / rotate) or `off`. The rM2 firmware blocks touch contacts that *start* while the pen is in proximity, so a gesture can't be begun mid-stroke. |
+| `--arbitration <value>` | `full` | Palm rejection while the pen is near: `full` (withhold all touch), `region` (withhold only what's under the writing hand, so the off hand can keep gesturing mid-stroke), or `off`. See [Palm rejection](#palm-rejection). |
+| `--hand <value>` | `auto` | `auto` (infer from contact position and pen tilt), `left`, or `right`. Only used by `--arbitration region`. |
 | `--pressure <value>` | `linear` | Pressure response curve. `linear` (1:1), `soft` (boosts light strokes — pen feels lighter), or `hard` (suppresses light strokes — pen feels stiffer). |
 | `--device <value>` | `auto` | `auto` (probe via `uname -m`), `rm2`, or `rmpp`. Auto-detect runs a short SSH command before the streaming pipeline starts; force a specific profile only if detection fails. |
 | `-h`, `--help` | — | Print usage and exit |
@@ -154,6 +156,18 @@ Three layers, in the order they act:
    life on pen-up. Driven from the pen loop rather than the touch loop, so it fires
    even if the panel says nothing. Stays closed for 150 ms after the pen leaves, so a
    hand still settling doesn't land.
+
+   `--arbitration region` narrows this to a rectangle around the pen instead of the
+   whole panel, after libinput's location-based arbitration, so the **off hand can
+   pinch and pan mid-stroke**. That works here only because the firmware keeps
+   reporting a contact that was already established — rest the off hand *before* the
+   pen approaches. The rectangle is measured, not guessed: a minute of writing with
+   the hand resting gave offsets from the tip of p99 +103 mm inboard, +160 mm behind,
+   −36 mm outboard and −33 mm ahead, and the defaults cover that with a margin. It's
+   one hand and one grip, so `full` remains the default; widen
+   `ArbitrationOptions` if your palm gets through. Handedness comes from where
+   contacts sit relative to the tip (84% inboard for a right-hander) plus pen tilt
+   (70%), or set `--hand left|right` to skip the inference.
 3. **Stale-contact sweep** (`TouchOptions.StaleContactMs`, default 3 s). Backstop for a
    contact abandoned with no release event: it is dropped and its slot returned to the
    pool. **Precaution, not a fix for observed behavior** — no contact was abandoned in
