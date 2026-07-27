@@ -97,10 +97,10 @@ public class RegionArbitrationTests
     [Theory]
     [InlineData(1000, 600, false, "just behind the tip — heel of the hand")]
     [InlineData(1500, 900, false, "behind and inboard — the palm")]
-    [InlineData(1000, 100, true, "well ahead of the tip")]
-    [InlineData(500, 500, true, "outboard, past the narrow margin")]
-    [InlineData(1000, 2100, true, "further behind than a hand reaches")]
-    [InlineData(2300, 500, true, "further inboard than a hand reaches")]
+    [InlineData(1000, -100, true, "well ahead of the tip (60mm)")]
+    [InlineData(400, 500, true, "outboard, past the measured 43mm reach")]
+    [InlineData(1000, 2400, true, "190mm behind — further than a hand reaches")]
+    [InlineData(2300, 500, true, "130mm inboard — further than a hand reaches")]
     public void RightHanded_SuppressesBehindAndToTheRightOfTheTip(
         int x, int y, bool expectForwarded, string why)
     {
@@ -179,7 +179,78 @@ public class RegionArbitrationTests
         Assert.Equal([8], Ids(gate.Filter(Touch((8, 1100, 700))))); // new contact, same place
     }
 
-    // ── Handedness from tilt ──────────────────────────────────────────────────
+    // ── The measured distribution ─────────────────────────────────────────────
+    //
+    // Offsets in mm from the pen tip, from handrest-*-2026-07-27.bin: a minute of
+    // writing with the hand resting, 4904 samples where a contact and a pen
+    // position coincide. The region must cover the hand's spread without
+    // swallowing the whole panel, so both directions are asserted.
+
+    [Theory]
+    [InlineData(+54, +91, "median hand position")]
+    [InlineData(+103, +160, "p99 — the far corner of the palm")]
+    [InlineData(-36, -33, "p1 — knuckles outboard and slightly ahead of the nib")]
+    [InlineData(-43, +20, "the furthest-left contact observed")]
+    public void MeasuredHandPositions_AreAllSuppressed(int dxMm, int dyMm, string what)
+    {
+        var gate = Make();
+        gate.OnPenFrame(Pen(1000, 500));
+
+        var result = gate.Filter(Touch((7, 1000 + (int)(dxMm * PxPerMm), 500 + (int)(dyMm * PxPerMm))));
+
+        Assert.True(Ids(result).Length == 0, $"{what} ({dxMm:+0;-0}, {dyMm:+0;-0} mm) should be suppressed");
+    }
+
+    [Theory]
+    [InlineData(-80, +40, "off hand, well outboard")]
+    [InlineData(+40, -80, "a finger well above the nib")]
+    [InlineData(+40, +200, "beyond the heel of the hand")]
+    [InlineData(+140, +60, "further inboard than the hand reaches")]
+    public void PositionsBeyondTheMeasuredSpread_AreForwarded(int dxMm, int dyMm, string what)
+    {
+        // The complement of the assertion above: the region has to end somewhere,
+        // or region mode is just full arbitration with extra arithmetic.
+        var gate = Make();
+        gate.OnPenFrame(Pen(1000, 500));
+
+        var result = gate.Filter(Touch((7, 1000 + (int)(dxMm * PxPerMm), 500 + (int)(dyMm * PxPerMm))));
+
+        Assert.True(Ids(result).Length == 1, $"{what} ({dxMm:+0;-0}, {dyMm:+0;-0} mm) should be forwarded");
+    }
+
+    // ── Handedness from contact position and tilt ─────────────────────────────
+
+    [Fact]
+    public void Auto_LearnsHandednessFromWhereContactsSit()
+    {
+        // The stronger signal: 84% of hand contacts sat right of the tip for a
+        // right-hander, against 70% for tilt. Contacts vote even while suppressed.
+        var gate = Make(Handedness.Auto);
+
+        for (var i = 0; i < 30; i++)
+        {
+            gate.OnPenFrame(Pen(1000, 500)); // no tilt at all
+            gate.Filter(Touch((7, 1000 + (int)(54 * PxPerMm), 500 + (int)(91 * PxPerMm))));
+        }
+
+        Assert.Equal(Handedness.Right, gate.ResolvedHand);
+    }
+
+    [Fact]
+    public void Auto_IgnoresAContactTooFarAwayToBeTheWritingHand()
+    {
+        // A finger halfway across the panel says nothing about which hand holds
+        // the pen, and must not vote.
+        var gate = Make(Handedness.Auto);
+
+        for (var i = 0; i < 40; i++)
+        {
+            gate.OnPenFrame(Pen(1000, 500));
+            gate.Filter(Touch((7, 1000 - (int)(300 * PxPerMm), 500 + (int)(40 * PxPerMm))));
+        }
+
+        Assert.Equal(Handedness.Auto, gate.ResolvedHand);
+    }
 
     [Fact]
     public void Auto_StartsSymmetricSoItErrsTowardSuppressing()

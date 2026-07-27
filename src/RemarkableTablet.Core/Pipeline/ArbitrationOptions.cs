@@ -37,12 +37,22 @@ public enum Handedness
 ///     (the mapping is orientation-corrected, so "behind" is toward the user
 ///     whichever way the tablet is held).
 ///     <para>
-///         The defaults are a first approximation of where a hand sits relative to
-///         the tip — roughly a palm's reach behind and inboard of the nib, with a
-///         small margin ahead and outboard. libinput's equivalent is admittedly
-///         heuristic too ("I'm not sure we got all of them right" — its author).
-///         Refine these against a two-handed capture corpus before making
-///         <see cref="ArbitrationMode.Region" /> the default.
+///         <b>Measured, 2026-07-27</b>, from a minute of continuous writing with the
+///         hand resting on the panel throughout — 4904 samples where a hand contact
+///         and a pen position coincide in time, capture committed as
+///         <c>handrest-*-2026-07-27.bin</c>. Offsets from the tip, in mm:
+///     </para>
+///     <code>
+///     dx (+ = right)   p1 -36   median +54   p99 +103   max +106
+///     dy (+ = toward)  p1 -33   median +91   p99 +160   max +168
+///     </code>
+///     <para>
+///         The defaults below cover the p99 of that distribution with a small
+///         margin. They are one right-handed person, one grip, one session — the
+///         numbers to widen if someone reports their palm getting through, and the
+///         reason <see cref="ArbitrationMode.Region" /> is not the default. Note
+///         two of these were guessed badly before being measured: the hand reaches
+///         further behind, and further to the *outboard* side, than seemed likely.
 ///     </para>
 /// </summary>
 public sealed record ArbitrationOptions
@@ -51,23 +61,26 @@ public sealed record ArbitrationOptions
 
     public Handedness Hand { get; init; } = Handedness.Auto;
 
-    /// <summary>Toward the user from the tip — where the heel of the hand rests.</summary>
-    public double BehindMm { get; init; } = 150;
+    /// <summary>Toward the user from the tip — where the heel of the hand rests. Measured p99 +160.</summary>
+    public double BehindMm { get; init; } = 165;
 
-    /// <summary>Away from the user from the tip; small, since the hand is rarely ahead of the nib.</summary>
-    public double AheadMm { get; init; } = 30;
+    /// <summary>Away from the user; the knuckles still reach a little past the nib. Measured p1 −33.</summary>
+    public double AheadMm { get; init; } = 40;
 
-    /// <summary>Toward the writing hand's side (right of the tip for a right-hander).</summary>
-    public double InboardMm { get; init; } = 120;
+    /// <summary>Toward the writing hand's side, right of the tip for a right-hander. Measured p99 +103.</summary>
+    public double InboardMm { get; init; } = 110;
 
-    /// <summary>Away from the writing hand's side.</summary>
-    public double OutboardMm { get; init; } = 30;
+    /// <summary>Away from the writing hand's side. Measured p1 −36, max −43.</summary>
+    public double OutboardMm { get; init; } = 45;
 
     /// <summary>
-    ///     Tilt-sign votes needed before Auto commits to a handedness. Each frame
-    ///     with the pen in range votes; the count is clamped so a long stroke can't
-    ///     make the decision unshakeable. At ~100 Hz this is a fraction of a second
-    ///     of consistent lean.
+    ///     Net votes needed before Auto commits to a handedness. Contacts vote by
+    ///     which side of the tip they sit (84% fell to the right for a right-hander
+    ///     in the calibration capture) and each pen frame votes by tilt direction
+    ///     (70% leaned right, median +1800 raw). Position is the stronger signal
+    ///     and dominates, since every contact in the band votes each frame; tilt
+    ///     carries the decision before any hand has landed. The count is clamped so
+    ///     a long stroke can't make the decision unshakeable.
     /// </summary>
     public int HandednessVotes { get; init; } = 25;
 }

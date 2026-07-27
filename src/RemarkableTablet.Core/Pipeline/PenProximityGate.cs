@@ -146,12 +146,14 @@ public sealed class PenProximityGate
             // A right-hander's pen leans toward their own shoulder, i.e. right,
             // which is +TiltX once mapped into screen space (measured convention,
             // see ReMarkable2Profile). Screen space is orientation-corrected, so
-            // this reads the same however the tablet is held. Votes are clamped so
-            // a long stroke can't make the decision unshakeable.
-            if (_opts.Hand == Handedness.Auto && frame.TiltX != 0)
-                _handednessVotes = Math.Clamp(
-                    _handednessVotes + Math.Sign(frame.TiltX), -_opts.HandednessVotes * 2,
-                    _opts.HandednessVotes * 2);
+            // this reads the same however the tablet is held.
+            //
+            // Weaker than the position signal in VoteOnHandedness — 70% of writing
+            // samples leaned right against 84% of contacts sitting right — and
+            // weaker still if the pen is held upright. Its job is to carry the
+            // decision before any hand has landed; once contacts exist they
+            // outvote it, since every contact in the band votes every frame.
+            if (_opts.Hand == Handedness.Auto && frame.TiltX != 0) Bump(Math.Sign(frame.TiltX));
 
             if (_closed) return;
 
@@ -213,8 +215,11 @@ public sealed class PenProximityGate
             // set, and membership never lapses while the contact lives.
             if (penNear)
                 foreach (var c in frame.Contacts)
+                {
+                    VoteOnHandedness(c.ScreenX, c.ScreenY);
                     if (IsUnderWritingHand(c.ScreenX, c.ScreenY))
                         _suppressedIds.Add(c.TrackingId);
+                }
 
             // Forget suppressed IDs that are gone (contact lifted).
             if (_suppressedIds.Count > 0)
@@ -238,6 +243,38 @@ public sealed class PenProximityGate
                     ? MappedTouchFrame.Empty
                     : new MappedTouchFrame(kept);
         }
+    }
+
+    /// <summary>
+    ///     A contact near the tip votes for the side it sits on. This is the
+    ///     stronger of the two handedness signals — 84% of hand contacts fell to
+    ///     the right of the tip for a right-hander in the calibration capture,
+    ///     against 70% for tilt direction — because it observes the hand itself
+    ///     rather than inferring it from how the pen is held.
+    ///     <para>
+    ///         Only contacts plausibly belonging to the writing hand vote: within
+    ///         the vertical band and a generous horizontal reach. A finger halfway
+    ///         across the panel says nothing about which hand holds the pen.
+    ///     </para>
+    /// </summary>
+    private void VoteOnHandedness(int x, int y)
+    {
+        if (_opts.Hand != Handedness.Auto) return;
+
+        var dy = y - _penY;
+        if (dy < -_opts.AheadMm * _yPixelsPerMm || dy > _opts.BehindMm * _yPixelsPerMm) return;
+
+        var dx = x - _penX;
+        var reach = Math.Max(_opts.InboardMm, _opts.OutboardMm) * 1.5 * _xPixelsPerMm;
+        if (Math.Abs(dx) > reach || dx == 0) return;
+
+        Bump(Math.Sign(dx));
+    }
+
+    private void Bump(int vote)
+    {
+        _handednessVotes = Math.Clamp(
+            _handednessVotes + vote, -_opts.HandednessVotes * 2, _opts.HandednessVotes * 2);
     }
 
     /// <summary>
