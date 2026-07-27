@@ -24,5 +24,7 @@ pen_capture.bin
 Thumbs.db
 .DS_Store
 
+# Working notes: reviews, research, plans. Kept local like docs/.
 docs/
+plans/
 RESOLUTION_PLAN.md
