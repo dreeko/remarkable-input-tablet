@@ -41,6 +41,8 @@ var outputMode = GetArg(args, "--output", "ink")!;
 var gestures = GetArg(args, "--gestures", "off")!;
 var pressure = GetArg(args, "--pressure", "linear")!;
 var fitArg = GetArg(args, "--fit", "crop")!;
+var arbitrationArg = GetArg(args, "--arbitration", "full")!;
+var handArg = GetArg(args, "--hand", "auto")!;
 var deviceArg = GetArg(args, "--device", "auto")!;
 var debug = args.Contains("--debug");
 
@@ -170,6 +172,22 @@ else if (gestures != "off")
     Console.Error.WriteLine($"Warning: unknown --gestures value '{gestures}'; expected touch|synth|off.");
 }
 
+var arbitration = new ArbitrationOptions
+{
+    Mode = arbitrationArg.ToLowerInvariant() switch
+    {
+        "region" => ArbitrationMode.Region,
+        "off" => ArbitrationMode.Off,
+        _ => ArbitrationMode.Full
+    },
+    Hand = handArg.ToLowerInvariant() switch
+    {
+        "left" => Handedness.Left,
+        "right" => Handedness.Right,
+        _ => Handedness.Auto
+    }
+};
+
 var transport = new SshTransport(connOpts);
 transport.StateChanged += state =>
 {
@@ -180,7 +198,8 @@ transport.StateChanged += state =>
     Console.ResetColor();
 };
 
-await using var pipeline = new TabletPipeline(transport, profile, mapper, output, touchMapper, touchOutput);
+await using var pipeline = new TabletPipeline(
+    transport, profile, mapper, output, touchMapper, touchOutput, null, arbitration);
 pipeline.DeviceNoticed += note =>
 {
     Console.ForegroundColor = ConsoleColor.Yellow;
@@ -245,7 +264,8 @@ static string? ValidateArgs(string[] values)
     var valueFlags = new HashSet<string>(StringComparer.Ordinal)
     {
         "--address", "--password", "--key", "--orientation", "--output",
-        "--gestures", "--pressure", "--device", "--width", "--height", "--fit"
+        "--gestures", "--pressure", "--device", "--width", "--height", "--fit",
+        "--arbitration", "--hand"
     };
     var switchFlags = new HashSet<string>(StringComparer.Ordinal) { "--debug" };
     var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -279,6 +299,14 @@ static string? ValidateArgs(string[] values)
     var fitValue = GetArg(values, "--fit", "crop")!;
     if (!OneOf(fitValue, "crop", "letterbox", "stretch"))
         return $"invalid --fit '{fitValue}'; expected crop, letterbox, or stretch.";
+
+    var arbitrationValue = GetArg(values, "--arbitration", "full")!;
+    if (!OneOf(arbitrationValue, "full", "region", "off"))
+        return $"invalid --arbitration '{arbitrationValue}'; expected full, region, or off.";
+
+    var handValue = GetArg(values, "--hand", "auto")!;
+    if (!OneOf(handValue, "auto", "left", "right"))
+        return $"invalid --hand '{handValue}'; expected auto, left, or right.";
 
     var pressureValue = GetArg(values, "--pressure", "linear")!;
     if (!OneOf(pressureValue, "linear", "soft", "hard"))
@@ -340,6 +368,11 @@ static void PrintUsage(TextWriter writer)
     writer.WriteLine("  --fit <value>          crop (default, aspect-correct), letterbox, or stretch");
     writer.WriteLine("  --pressure <value>     linear, soft, or hard (default: linear)");
     writer.WriteLine("  --gestures <value>     off or touch (default: off)");
+    writer.WriteLine("  --arbitration <value>  Palm rejection while the pen is near:");
+    writer.WriteLine("                         full (default), region (allows off-hand");
+    writer.WriteLine("                         gestures mid-stroke), or off");
+    writer.WriteLine("  --hand <value>         auto (default, from pen tilt), left, or right;");
+    writer.WriteLine("                         only used by --arbitration region");
     writer.WriteLine("  --width <px>           Override detected screen width; requires --height");
     writer.WriteLine("  --height <px>          Override detected screen height; requires --width");
 #if WINDOWS_PLATFORM

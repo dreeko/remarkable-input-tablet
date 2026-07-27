@@ -10,7 +10,7 @@ public class PenProximityGateTests
 
     private PenProximityGate Make()
     {
-        return new PenProximityGate(() => _now);
+        return new PenProximityGate(clock: () => _now);
     }
 
     private static MappedFrame Pen(bool inRange)

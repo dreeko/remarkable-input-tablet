@@ -25,7 +25,7 @@ public sealed class TabletPipeline : IAsyncDisposable
 {
     private static readonly int[] BackoffSeconds = [1, 2, 4, 8, 16, 30];
     private readonly CancellationTokenSource _cts = new();
-    private readonly PenProximityGate _gate = new();
+    private readonly PenProximityGate _gate;
 
     // Serialises access to the touch sink: reached from both output loops.
     private readonly object _touchSink = new();
@@ -60,7 +60,8 @@ public sealed class TabletPipeline : IAsyncDisposable
         IOutputMode output,
         TouchCoordinateMapper? touchMapper,
         ITouchOutput? touchOutput,
-        TouchOptions? touchOptions = null)
+        TouchOptions? touchOptions = null,
+        ArbitrationOptions? arbitration = null)
     {
         _transport = transport;
         _profile = profile;
@@ -69,6 +70,13 @@ public sealed class TabletPipeline : IAsyncDisposable
         _touchMapper = touchMapper;
         _touchOutput = touchOutput;
         _touchOptions = touchOptions ?? TouchOptions.ForProfile(profile);
+
+        // The gate's region is specified in millimetres of hand, so it needs the
+        // same px-per-mm the virtual pen device declares.
+        _gate = new PenProximityGate(
+            arbitration,
+            mapper.Transform.XResolution,
+            mapper.Transform.YResolution);
 
         _transport.StateChanged += s => ConnectionStateChanged?.Invoke(s);
     }
