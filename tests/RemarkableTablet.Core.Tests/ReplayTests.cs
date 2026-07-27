@@ -201,6 +201,63 @@ public class ReplayTests
         Assert.Empty(frames[^1].Contacts);
     }
 
+    // ── Tilt, measured 2026-07-27: tip planted, pen leaned in four directions.
+    //    Raw medians per hold, straight from tilt-pen-2026-07-27.bin. ──────────
+
+    [Theory]
+    // raw tilt (X, Y)        lean direction        expected screen lean, portrait
+    [InlineData(6300, -600, "away from the user", 0, -1)] // toward the top of the device → screen up
+    [InlineData(-4600, 100, "toward the user", 0, +1)] //                            → screen down
+    [InlineData(-1000, -5200, "to the left", -1, 0)] //                              → screen left
+    [InlineData(1000, 5900, "to the right", +1, 0)] //                               → screen right
+    public void MeasuredTilt_PointsTheSameWayOnScreenAsInTheHand(
+        int rawTiltX, int rawTiltY, string lean, int expectSignX, int expectSignY)
+    {
+        var (pen, _) = Mappers();
+        var m = pen.Map(new PenFrame(
+            Rm2.Pen.XMax / 2, Rm2.Pen.YMax / 2, 1000, rawTiltX, rawTiltY, 0,
+            true, false, false, false, true));
+
+        // Only the dominant component is asserted; the other is near zero and its
+        // sign is noise from a hand-held lean.
+        if (expectSignX != 0)
+            Assert.True(Math.Sign(m.TiltX) == expectSignX,
+                $"leaning {lean} should tilt screen-X {(expectSignX > 0 ? "positive" : "negative")}, got {m.TiltX}");
+        if (expectSignY != 0)
+            Assert.True(Math.Sign(m.TiltY) == expectSignY,
+                $"leaning {lean} should tilt screen-Y {(expectSignY > 0 ? "positive" : "negative")}, got {m.TiltY}");
+    }
+
+    [Fact]
+    public void MeasuredTilt_RotatesWithTheDeviceInLandscape()
+    {
+        // Same physical lean, device rotated 90° CCW: leaning toward the device's
+        // top edge now points screen-right rather than screen-up.
+        var opts = MappingOptions.ForScreen(1920, 1080, Orientation.Landscape, FitMode.Stretch);
+        var pen = new CoordinateMapper(opts, Rm2, PressureCurve.Linear);
+
+        var away = pen.Map(new PenFrame(
+            Rm2.Pen.XMax / 2, Rm2.Pen.YMax / 2, 1000, 6300, -600, 0,
+            true, false, false, false, true));
+
+        Assert.True(away.TiltX < 0, $"expected screen-left in landscape, got {away.TiltX}");
+    }
+
+    [Fact]
+    public async Task TiltCapture_SeparatesIntoFourDistinctLeans()
+    {
+        // Guards the capture itself: if someone re-records it, the four holds must
+        // still be distinguishable, or the values pinned above mean nothing.
+        var frames = await ReplayPenAsync(Capture("tilt-pen-2026-07-27.bin"));
+        var down = frames.Where(f => f.Pressure > 0).ToList();
+        Assert.NotEmpty(down);
+
+        Assert.True(down.Max(f => f.TiltX) > 4000, "no strong lean toward the top of the device");
+        Assert.True(down.Min(f => f.TiltX) < -4000, "no strong lean toward the user");
+        Assert.True(down.Max(f => f.TiltY) > 4000, "no strong lean to the right");
+        Assert.True(down.Min(f => f.TiltY) < -4000, "no strong lean to the left");
+    }
+
     [Fact]
     public async Task EveryCapture_ParsesAsWholeEventsWithNoDesync()
     {

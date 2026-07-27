@@ -450,14 +450,14 @@ Capacitive multi-touch panel, driver `pt_mt`. Confirmed via `evtest` 2026-05-07.
 > it — which is what the pen gate is for (see [Palm rejection](#palm-rejection)).
 > Workflow is unchanged: lift the pen, gesture, then resume drawing.
 
-> **Note on tilt:** the tilt vector rotates with the corrected position transform —
-> `+ABS_TILT_X` leans along `+ABS_X`, which the corner captures show points *up* the
-> device (screen −Y in portrait), and `+ABS_TILT_Y` leans along `+ABS_Y`, which points
-> right. All four cases were negated by the 2026-07-25 correction, since the pen axes
-> turned out to be 180° out. What is still unverified is the *hardware's* sign
-> convention — whether leaning the pen away from you increases or decreases
-> `ABS_TILT_X`. If brush highlights point the wrong way, `CoordinateMapper.RotateTilt`
-> is where to flip.
+> **Note on tilt — measured 2026-07-27.** Holding the pen tip on one spot and
+> leaning the far end in each of four directions gives: **+`ABS_TILT_X` leans toward
+> the top** of the device (away +6300, toward −4600) and **+`ABS_TILT_Y` leans right**
+> (left −5200, right +5900). Both point the same way as the position axis of the same
+> name, so the tilt vector rotates with the position transform, and the result matches
+> the Windows Ink convention (positive = pen leans toward +X / +Y on screen). Observed
+> range was ±6300 against a declared ±9000 — that's the limit of a comfortable hand
+> lean, not of the digitizer.
 
 ## Hardware details — Paper Pro
 

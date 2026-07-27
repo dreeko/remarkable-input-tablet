@@ -27,6 +27,16 @@ namespace RemarkableTablet.Core.Devices;
 ///             along the top edge. The panel is INPUT_PROP_DIRECT but its origin
 ///             is the bottom-left, not the display's top-left.
 ///         </item>
+///         <item>
+///             Tilt, measured 2026-07-27 the same way (four holds with the tip
+///             planted and the pen leaned): <b>+ABS_TILT_X leans toward the top</b>
+///             of the device (away +6300, toward −4600) and <b>+ABS_TILT_Y leans
+///             right</b> (left −5200, right +5900). Both therefore point the same
+///             way as the position axis of the same name, which is what
+///             <see cref="Mapping.CoordinateMapper" /> assumed — now measured
+///             rather than inferred. Observed range ±6300 against a declared
+///             ±9000, consistent with a hand-held lean rather than the limit.
+///         </item>
 ///     </list>
 ///     Touch is MT-B slot protocol. BTN_TOUCH is NOT reported by the touchscreen —
 ///     contact lifecycle is driven by ABS_MT_TRACKING_ID transitions.

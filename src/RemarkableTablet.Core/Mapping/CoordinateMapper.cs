@@ -92,11 +92,12 @@ public sealed class CoordinateMapper
     ///     the device is rotated; brushes that key off tilt direction would otherwise
     ///     be wrong in non-Portrait orientations.
     ///     <para>
-    ///         Derived from the measured axis directions, not chosen: +ABS_TILT_Y
-    ///         leans along +ABS_Y, which points right (screen +X in portrait), and
-    ///         +ABS_TILT_X leans along +ABS_X, which points up (screen −Y). Each
-    ///         case is that pair rotated with the position transform. Sign
-    ///         convention follows Windows Ink (positive = pen leans toward +X / +Y).
+    ///         Measured, not chosen (2026-07-27, see ReMarkable2Profile): +ABS_TILT_Y
+    ///         leans right, the direction +ABS_Y points, which is screen +X in
+    ///         portrait; +ABS_TILT_X leans toward the top of the device, the
+    ///         direction +ABS_X points, which is screen −Y. Each case below is that
+    ///         pair rotated with the position transform. The result matches the
+    ///         Windows Ink convention (positive = pen leans toward +X / +Y).
     ///     </para>
     /// </summary>
     private static (int X, int Y) RotateTilt(int tx, int ty, Orientation o)
