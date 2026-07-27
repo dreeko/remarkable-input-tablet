@@ -10,6 +10,7 @@ using RemarkableTablet.Core.Devices;
 using RemarkableTablet.Core.Mapping;
 using RemarkableTablet.Core.Output;
 using RemarkableTablet.Core.Pipeline;
+using RemarkableTablet.Core.Tablet;
 using RemarkableTablet.Core.Transport;
 using Renci.SshNet.Common;
 
@@ -45,6 +46,7 @@ var arbitrationArg = GetArg(args, "--arbitration", "full")!;
 var handArg = GetArg(args, "--hand", "auto")!;
 var areaArg = GetArg(args, "--area", null);
 var edgeArg = GetArg(args, "--edge", "clamp")!;
+var palmArg = GetArg(args, "--palm-size", null);
 var deviceArg = GetArg(args, "--device", "auto")!;
 var debug = args.Contains("--debug");
 
@@ -203,6 +205,15 @@ var arbitration = new ArbitrationOptions
     }
 };
 
+var touchOptions = TouchOptions.ForProfile(profile) with
+{
+    MaxTouchMajor = palmArg is null
+        ? new TouchOptions().MaxTouchMajor
+        : palmArg.Equals("off", StringComparison.OrdinalIgnoreCase)
+            ? 0
+            : int.Parse(palmArg)
+};
+
 var transport = new SshTransport(connOpts);
 transport.StateChanged += state =>
 {
@@ -214,7 +225,7 @@ transport.StateChanged += state =>
 };
 
 await using var pipeline = new TabletPipeline(
-    transport, profile, mapper, output, touchMapper, touchOutput, null, arbitration);
+    transport, profile, mapper, output, touchMapper, touchOutput, touchOptions, arbitration);
 pipeline.DeviceNoticed += note =>
 {
     Console.ForegroundColor = ConsoleColor.Yellow;
@@ -280,7 +291,7 @@ static string? ValidateArgs(string[] values)
     {
         "--address", "--password", "--key", "--orientation", "--output",
         "--gestures", "--pressure", "--device", "--width", "--height", "--fit",
-        "--arbitration", "--hand", "--area", "--edge"
+        "--arbitration", "--hand", "--area", "--edge", "--palm-size"
     };
     var switchFlags = new HashSet<string>(StringComparer.Ordinal) { "--debug" };
     var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -351,6 +362,11 @@ static string? ValidateArgs(string[] values)
             return $"invalid --area: {areaError}";
     }
 
+    if (GetArg(values, "--palm-size", null) is { } palmValue &&
+        !palmValue.Equals("off", StringComparison.OrdinalIgnoreCase) &&
+        (!int.TryParse(palmValue, out var palmSize) || palmSize < 0))
+        return $"invalid --palm-size '{palmValue}'; expected a non-negative number or off.";
+
     var pressureValue = GetArg(values, "--pressure", "linear")!;
     if (!OneOf(pressureValue, "linear", "soft", "hard"))
         return $"invalid --pressure '{pressureValue}'; expected linear, soft, or hard.";
@@ -420,6 +436,8 @@ static void PrintUsage(TextWriter writer)
     writer.WriteLine("                         gestures mid-stroke), or off");
     writer.WriteLine("  --hand <value>         auto (default, from pen tilt), left, or right;");
     writer.WriteLine("                         only used by --arbitration region");
+    writer.WriteLine("  --palm-size <n|off>    Drop touch contacts bigger than n (default 35,");
+    writer.WriteLine("                         measured; a fingertip reads 17, a resting hand 52)");
     writer.WriteLine("  --width <px>           Override detected screen width; requires --height");
     writer.WriteLine("  --height <px>          Override detected screen height; requires --width");
 #if WINDOWS_PLATFORM

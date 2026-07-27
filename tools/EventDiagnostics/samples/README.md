@@ -251,3 +251,54 @@ nothing.
   permanently stuck touch-down holding an output slot — is severe and silent.
 - "Simultaneous draw + pinch is impossible" is still true for *starting* a gesture mid-stroke, but not
   because touch stops entirely: an already-down finger keeps being tracked.
+
+---
+
+## Contact-size corpus (2026-07-27)
+
+[`touchsizes-2026-07-27.bin`](touchsizes-2026-07-27.bin) — six deliberate touch types, pen kept well
+away throughout: index fingertip held, fingertip sliding, thumb, finger pressed flat, two-finger
+pinch, and quick taps all over the panel. Together with the writing-hand contacts in
+[`handrest-touch-2026-07-27.bin`](handrest-touch-2026-07-27.bin) this gives two labelled classes for
+`ABS_MT_TOUCH_MAJOR`.
+
+The axis is **quantised to about ten levels** — 8, 17, 26, 35, 44, 52, 61, 70, 79, 88 — not the
+continuous 0–255 the header declares.
+
+| Class | contacts | median | max |
+|---|---|---|---|
+| index fingertip (held, sliding) | 13 | 17 | 35 |
+| thumb | 1 | 17 | 26 |
+| finger pressed flat | 2 | 17 | 26 |
+| two-finger pinch | 8 | 17 | 17 |
+| quick taps | 20 | 17 | 17 |
+| **writing hand, resting** | **60** | **52** | **88** |
+
+### Choosing the threshold
+
+Sample counts mislead here, because classification is sticky — one frame over the line kills a contact
+for its whole life — so the number that matters is whether a contact *ever* exceeds the threshold:
+
+| threshold | deliberate contacts killed | hand contacts caught |
+|---|---|---|
+| 17 | 27% | 98% |
+| 21 | 27% | 98% |
+| 26 | 9% | 92% |
+| **35** | **0%** | **92%** |
+| 44 | 0% | 92% |
+
+Hence `TouchOptions.MaxTouchMajor = 35`. Below 35 the filter starts eating real fingertips for a few
+percent more palm coverage, which is a bad trade when the pen gate already covers the palm-while-drawing
+case. The 8% of hand contacts that read fingertip-sized are indistinguishable by size and are left to
+the gate.
+
+Caveat: one person's hands. Re-run this capture on a different pair before treating the number as
+universal.
+
+### Physical units are still unknown
+
+A fingertip contact is roughly 9 mm across, which would put the scale near 0.5 mm per unit (palm
+median 52 ≈ 27 mm, largest 88 ≈ 46 mm — both plausible). That is an inference from an assumed finger
+size, not a measurement, which is why Windows `rcContact` is still left unset rather than populated
+with a converted rectangle. To settle it, press objects of known width (a coin, an eraser) and read
+the reported major axis.

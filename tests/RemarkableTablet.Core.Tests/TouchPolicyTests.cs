@@ -178,17 +178,55 @@ public class TouchPolicyTests
     }
 
     [Fact]
-    public void SizeFilter_IsOffByDefault()
+    public void SizeFilter_DefaultsToTheMeasuredThreshold()
     {
-        // The rM2 can't report MT_TOOL_PALM and no palm capture exists yet, so a
-        // default threshold would be a guess. Off means "forward everything".
+        // 35, from the 2026-07-27 corpus: no deliberate contact across fingertip,
+        // thumb, flat pad, pinch and taps exceeded 26; a resting hand medians 52.
+        Assert.Equal(35, new TouchOptions().MaxTouchMajor);
+
         var (sm, w, ch) = Setup(new TouchOptions { MaxTracked = 5 });
+
+        Contact(sm, w, 0, 1, 88); // largest hand reading in the corpus
+        sm.Process(Syn(), w);
+        Assert.Empty(Last(ch).Contacts);
+
+        Contact(sm, w, 1, 2, 26); // largest deliberate reading in the corpus
+        sm.Process(Syn(), w);
+        Assert.Single(Last(ch).Contacts);
+    }
+
+    [Fact]
+    public void SizeFilter_CanBeTurnedOff()
+    {
+        var (sm, w, ch) = Setup(new TouchOptions { MaxTracked = 5, MaxTouchMajor = 0 });
 
         Contact(sm, w, 0, 1, 255);
         sm.Process(Syn(), w);
 
         Assert.Single(Last(ch).Contacts);
         Assert.Equal(0, sm.DroppedContacts);
+    }
+
+    // Every distinct size the panel reports, labelled by what produced it in the
+    // capture corpus. Pins the classification to hardware readings rather than to
+    // the threshold's arithmetic.
+    [Theory]
+    [InlineData(8, true, "fingertip, light")]
+    [InlineData(17, true, "fingertip / thumb / pinch — the common reading")]
+    [InlineData(26, true, "thumb or flat finger pad at its largest")]
+    [InlineData(35, true, "the boundary itself: seen once from a fingertip")]
+    [InlineData(44, false, "hand")]
+    [InlineData(52, false, "hand — median resting reading")]
+    [InlineData(88, false, "hand — largest observed")]
+    public void MeasuredSizes_AreClassifiedAsObserved(int major, bool expectForwarded, string what)
+    {
+        var (sm, w, ch) = Setup(new TouchOptions { MaxTracked = 5 });
+
+        Contact(sm, w, 0, 1, major);
+        sm.Process(Syn(), w);
+
+        Assert.True(expectForwarded == (Last(ch).Contacts.Count == 1),
+            $"{what} (major {major}) should be {(expectForwarded ? "forwarded" : "dropped")}");
     }
 
     [Fact]

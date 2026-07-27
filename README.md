@@ -82,6 +82,7 @@ For unattended use, prefer `--key ~/.ssh/id_ed25519` over putting a password in 
 | `--width <px>` | auto | Positive screen width in pixels; must be used with `--height` |
 | `--height <px>` | auto | Positive screen height in pixels; must be used with `--width` |
 | `--debug` | off | Print pipeline stage info on startup, and touch counters on exit (contacts dropped, stale releases, pen-gate closures) |
+| `--palm-size <n\|off>` | `35` | Drop touch contacts whose major axis exceeds `n`. Measured: a fingertip reads 17, a resting hand 52. `off` disables. |
 | `--gestures <value>` | `off` | `touch` (inject multi-touch contacts for pinch / pan / rotate) or `off`. The rM2 firmware blocks touch contacts that *start* while the pen is in proximity, so a gesture can't be begun mid-stroke. |
 | `--arbitration <value>` | `full` | Palm rejection while the pen is near: `full` (withhold all touch), `region` (withhold only what's under the writing hand, so the off hand can keep gesturing mid-stroke), or `off`. See [Palm rejection](#palm-rejection). |
 | `--hand <value>` | `auto` | `auto` (infer from contact position and pen tilt), `left`, or `right`. Only used by `--arbitration region`. |
@@ -195,15 +196,26 @@ Three layers, in the order they act:
    `tools/EventDiagnostics/samples/touch-pen.log`), because the panel only reports on
    change.
 
-A **contact-size filter** (`TouchOptions.MaxTouchMajor`) exists but is **off by
-default**. The rM2 cannot report `MT_TOOL_PALM` — its `ABS_MT_TOOL_TYPE` range is 0–1
-and the kernel's palm value is 2 — so size is the only available signal, and no
-calibrated threshold exists yet. To set one: capture a palm rest and a fingertip with
-`tools/EventDiagnostics` against `/dev/input/event2`, compare their
-`ABS_MT_TOUCH_MAJOR` values, and pick a threshold between them. Contact size is
-forwarded to hosts on Linux (`ABS_MT_TOUCH_MAJOR`/`MINOR`); on Windows it is not,
-because `rcContact` is a pixel rectangle and this panel's size units are unknown —
-see `MappedTouchContact` for the details.
+4. **Contact-size filter** (`--palm-size`, default **35**). Catches the case the gate
+   cannot: a hand resting while the pen is *away*, which the firmware reports happily.
+   The rM2 cannot report `MT_TOOL_PALM` — its `ABS_MT_TOOL_TYPE` range is 0–1 and the
+   kernel's palm value is 2 — so contact size is the only signal available.
+
+   The threshold is measured, not guessed. Across 44 deliberate contacts (fingertip,
+   thumb, finger pressed flat, two-finger pinch, quick taps) nothing read above 26,
+   while a resting writing hand medians 52 and reaches 88. At 35 no deliberate contact
+   is dropped and 92% of hand contacts are caught; the remainder read fingertip-sized
+   and are left to the pen gate. A lower threshold is tempting — 21 catches 98% — but
+   classification is sticky, so one frame over the line kills a contact for good, and
+   at 21 that killed 27% of real fingertip contacts. Details and the raw corpus:
+   [`samples/README.md`](tools/EventDiagnostics/samples/README.md#contact-size-corpus-2026-07-27).
+
+   It's one person's hands, so `--palm-size off` disables it and `--palm-size <n>` sets
+   your own. If deliberate touches start getting ignored, that's the flag.
+
+Contact size is forwarded to hosts on Linux (`ABS_MT_TOUCH_MAJOR`/`MINOR`); on Windows
+it is not, because `rcContact` is a pixel rectangle and this panel's size units are
+still unknown in physical terms — see `MappedTouchContact`.
 
 ## App compatibility
 
